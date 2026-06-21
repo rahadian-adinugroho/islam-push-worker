@@ -1,6 +1,7 @@
 name = "islam-push"
 main = "src/index.ts"
-compatibility_date = "2024-01-01"
+compatibility_date = "2024-09-23"
+compatibility_flags = ["nodejs_compat"]
 
 [[d1_databases]]
 binding = "DB"
@@ -8,7 +9,7 @@ database_name = "islam-push-db"
 # database_id will be filled in after TF creates the D1
 # Run: terraform output d1_database_id (from cloudflare/personal/raharoho.me/pwa)
 # Then paste the value here before deploying
-database_id = "REPLACE_AFTER_TF_APPLY"
+database_id = "53ff7dbb-8b53-4b9d-91fd-2ba56aef3e84"
 
 [vars]
 VAPID_PUBLIC_KEY = "BO52m2RzNMPmB1E8ZeShL6uDgtx8qjSHjwkW7nt5AP2kqPUhilePDf_Vki89XUB3nqQ63jv7qBYaLqkgcDWi-DY"
