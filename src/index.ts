@@ -15,7 +15,7 @@ import {
 import { sendPush } from './push';
 import { log, initLogger } from './logger';
 import { corsHeaders } from './cors';
-import { normalizeLocale } from './i18n';
+import { normalizeLocale, normalizeCalcMethod } from './i18n';
 
 export interface Env {
   DB: D1Database;
@@ -52,13 +52,14 @@ export default {
 
       switch (url.pathname) {
         case '/api/subscribe': {
-          const { endpoint, keys, lat, lng, timezone, locale, prefs } = body as {
+          const { endpoint, keys, lat, lng, timezone, locale, calcMethod, prefs } = body as {
             endpoint?: string;
             keys?: { p256dh?: string; auth?: string };
             lat?: number;
             lng?: number;
             timezone?: string;
             locale?: string;
+            calcMethod?: string;
             prefs?: Record<string, boolean>;
           };
 
@@ -69,8 +70,9 @@ export default {
 
           const preferences = prefs ?? {};
           const normalizedLocale = normalizeLocale(locale);
-          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, normalizedLocale, preferences);
-          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} locale=${normalizedLocale} prefs=${JSON.stringify(preferences)}`);
+          const normalizedMethod = normalizeCalcMethod(calcMethod);
+          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, normalizedLocale, normalizedMethod, preferences);
+          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} locale=${normalizedLocale} method=${normalizedMethod} prefs=${JSON.stringify(preferences)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -151,7 +153,7 @@ export default {
     let deadRemoved = 0;
 
     for (const sub of subscriptions) {
-      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng);
+      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, sub.calc_method);
       const currentLocalMinutes = getCurrentLocalMinutes(sub.timezone);
       const todayStr = getTodayDateString(sub.timezone);
 

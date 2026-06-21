@@ -50,7 +50,7 @@ function createMockDB(): { db: D1Database; dump: () => Row[] } {
 
     if (stmt.startsWith('INSERT') || stmt.startsWith('INSERT OR REPLACE')) {
       const rows = getRows(stmt);
-      const keys = ['endpoint', 'keys_p256dh', 'keys_auth', 'lat', 'lng', 'timezone', 'locale', 'notify_fajr', 'notify_dhuhr', 'notify_asr', 'notify_maghrib', 'notify_isha'];
+      const keys = ['endpoint', 'keys_p256dh', 'keys_auth', 'lat', 'lng', 'timezone', 'locale', 'calc_method', 'notify_fajr', 'notify_dhuhr', 'notify_asr', 'notify_maghrib', 'notify_isha'];
       const row: Row = {};
       keys.forEach((k, i) => {
         if (i < args.length) row[k] = args[i];
@@ -137,6 +137,7 @@ describe('db helpers', () => {
       106.8,
       'Asia/Jakarta',
       'en',
+      'muslimWorldLeague',
       { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
     );
     const rows = mock.dump();
@@ -146,22 +147,22 @@ describe('db helpers', () => {
   });
 
   it('addSubscription upserts on duplicate endpoint', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', { fajr: false });
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', { fajr: true });
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', { fajr: false });
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', { fajr: true });
     const rows = mock.dump();
     expect(rows).toHaveLength(1);
     expect(rows[0].notify_fajr).toBe(1);
   });
 
   it('removeSubscription deletes the row', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', {});
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', {});
     expect(mock.dump()).toHaveLength(1);
     await removeSubscription(env, 'ep1');
     expect(mock.dump()).toHaveLength(0);
   });
 
   it('updatePreferences updates only specified fields', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', {
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', {
       fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true,
     });
     await updatePreferences(env, 'ep1', { fajr: false, maghrib: false });
@@ -174,27 +175,28 @@ describe('db helpers', () => {
   });
 
   it('updatePreferences does nothing when preferences object is empty', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', { fajr: true });
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', { fajr: true });
     await updatePreferences(env, 'ep1', {});
     const rows = mock.dump();
     expect(rows[0].notify_fajr).toBe(1);
   });
 
   it('getActiveSubscriptions returns all rows', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', {});
-    await addSubscription(env, { endpoint: 'ep2', keys: { p256dh: 'c', auth: 'd' } }, 1, 1, 'Asia/Jakarta', 'id', {});
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', {});
+    await addSubscription(env, { endpoint: 'ep2', keys: { p256dh: 'c', auth: 'd' } }, 1, 1, 'Asia/Jakarta', 'id', 'singapore', {});
     const subs = await getActiveSubscriptions(env);
     expect(subs).toHaveLength(2);
   });
 
-  it('addSubscription stores locale', async () => {
-    await addSubscription(env, { endpoint: 'ep-id', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'Asia/Jakarta', 'id', { fajr: true });
+  it('addSubscription stores locale and calc_method', async () => {
+    await addSubscription(env, { endpoint: 'ep-id', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'Asia/Jakarta', 'id', 'singapore', { fajr: true });
     const rows = mock.dump();
     expect(rows[0].locale).toBe('id');
+    expect(rows[0].calc_method).toBe('singapore');
   });
 
   it('markNotified sets last_notified fields', async () => {
-    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', {});
+    await addSubscription(env, { endpoint: 'ep1', keys: { p256dh: 'a', auth: 'b' } }, 0, 0, 'UTC', 'en', 'muslimWorldLeague', {});
     await markNotified(env, 'ep1', 'maghrib', '2026-06-21');
     const rows = mock.dump();
     expect(rows[0].last_notified_prayer).toBe('maghrib');

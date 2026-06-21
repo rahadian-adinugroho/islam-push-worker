@@ -10,12 +10,43 @@ export interface PrayerTimeEntry {
 const ALL_PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 /**
- * Calculate today's prayer times for a given location using the
- * Singapore / Kemenag (Indonesian Ministry of Religious Affairs) method.
+ * Map a calculation method name to its adhan equivalent.
+ * Defaults to MuslimWorldLeague for unknown values.
  */
-export function getTodayPrayerTimes(lat: number, lng: number): PrayerTimeEntry[] {
+function getCalculationMethod(method: string): CalculationMethod {
+  switch (method) {
+    case 'singapore':
+      return CalculationMethod.Singapore();
+    case 'ummAlQura':
+      return CalculationMethod.UmmAlQura();
+    case 'muslimWorldLeague':
+      return CalculationMethod.MuslimWorldLeague();
+    case 'egyptian':
+      return CalculationMethod.Egyptian();
+    case 'karachi':
+      return CalculationMethod.Karachi();
+    case 'northAmerica':
+      return CalculationMethod.NorthAmerica();
+    case 'tehran':
+      return CalculationMethod.Tehran();
+    case 'turkey':
+      return CalculationMethod.Turkey();
+    default:
+      return CalculationMethod.MuslimWorldLeague();
+  }
+}
+
+/**
+ * Calculate today's prayer times for a given location using the
+ * specified calculation method (default: 'muslimWorldLeague').
+ */
+export function getTodayPrayerTimes(
+  lat: number,
+  lng: number,
+  method: string = 'muslimWorldLeague',
+): PrayerTimeEntry[] {
   const coords = new Coordinates(lat, lng);
-  const params = CalculationMethod.Singapore();
+  const params = getCalculationMethod(method);
   const date = new Date();
   const times = new PrayerTimes(coords, date, params) as Record<string, unknown>;
 
