@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import type { PrayerName } from './prayer-times';
+import { log } from './logger';
 
 export interface PushResult {
   ok: boolean;
@@ -53,12 +54,17 @@ export async function sendPush(
 
   try {
     await webpush.sendNotification(pushSub, payload);
+    log.debug(`[push] ok: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer}`);
     return { ok: true };
   } catch (error: unknown) {
     const err = error as { statusCode?: number; message?: string };
     if (err.statusCode === 404 || err.statusCode === 410) {
+      // Dead subscription (user uninstalled PWA or revoked permission) — expected behavior
+      log.warn(`[push] dead (${err.statusCode}): sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer}`);
       return { ok: false, statusCode: err.statusCode };
     }
+    // Other errors are unexpected — network issues, VAPID problems, etc.
+    log.error(`[push] failed: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer} status=${err.statusCode} msg=${err.message}`);
     throw error;
   }
 }
