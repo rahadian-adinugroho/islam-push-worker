@@ -14,6 +14,7 @@ import {
 } from './db';
 import { sendPush } from './push';
 import { log, initLogger } from './logger';
+import { corsHeaders } from './cors';
 
 export interface Env {
   DB: D1Database;
@@ -21,18 +22,6 @@ export interface Env {
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
   LOG_LEVEL?: string;
-}
-
-const ALLOWED_ORIGINS = ['https://islam.raharoho.me', 'http://localhost:5173'];
-
-function corsHeaders(origin: string | null): Record<string, string> {
-  const allowed = origin && ALLOWED_ORIGINS.includes(origin) ? origin : 'https://islam.raharoho.me';
-  return {
-    'Access-Control-Allow-Origin': allowed,
-    'Access-Control-Allow-Methods': 'POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type',
-    'Content-Type': 'application/json',
-  };
 }
 
 function jsonResponse(body: unknown, status: number, headers: Record<string, string>): Response {
