@@ -44,7 +44,7 @@ describe('isOriginAllowed', () => {
       expect(isOriginAllowed('https://google.com')).toBe(false);
     });
 
-    it('rejects null/empty', () => {
+    it('rejects empty string', () => {
       expect(isOriginAllowed('')).toBe(false);
     });
 
