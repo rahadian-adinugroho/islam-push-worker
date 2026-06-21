@@ -41,6 +41,9 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const origin = request.headers.get('Origin');
     const headers = corsHeaders(origin);
+    const url = new URL(request.url);
+
+    console.log(`[fetch] ${request.method} ${url.pathname}`);
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -50,8 +53,6 @@ export default {
     if (request.method !== 'POST') {
       return jsonResponse({ error: 'Method Not Allowed' }, 405, headers);
     }
-
-    const url = new URL(request.url);
 
     try {
       const body = (await request.json()) as Record<string, unknown>;
@@ -68,10 +69,13 @@ export default {
           };
 
           if (!endpoint || !keys?.p256dh || !keys?.auth || lat == null || lng == null || !timezone) {
+            console.log(`[subscribe] rejected: missing fields from ${endpoint?.slice(0, 50) ?? 'unknown'}`);
             return jsonResponse({ error: 'Missing required fields: endpoint, keys, lat, lng, timezone' }, 400, headers);
           }
 
-          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, preferences ?? {});
+          const prefs = preferences ?? {};
+          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, prefs);
+          console.log(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} prefs=${JSON.stringify(prefs)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -82,6 +86,7 @@ export default {
           }
 
           await removeSubscription(env, endpoint);
+          console.log(`[unsubscribe] ok: ${endpoint.slice(0, 50)}...`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -92,19 +97,29 @@ export default {
           }
 
           await updatePreferences(env, endpoint, preferences);
+          console.log(`[preferences] ok: ${endpoint.slice(0, 50)}... prefs=${JSON.stringify(preferences)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
         default:
+          console.log(`[fetch] 404: ${url.pathname}`);
           return jsonResponse({ error: 'Not Found' }, 404, headers);
       }
     } catch (err) {
+      console.error(`[fetch] error: ${err instanceof Error ? err.message : String(err)}`);
       return jsonResponse({ error: 'Internal Server Error' }, 500, headers);
     }
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    const startTime = Date.now();
+    console.log(`[scheduled] cron triggered at ${new Date().toISOString()}`);
+
     const subscriptions = await getActiveSubscriptions(env);
+    console.log(`[scheduled] found ${subscriptions.length} active subscription(s)`);
+
+    let pushesSent = 0;
+    let deadRemoved = 0;
 
     for (const sub of subscriptions) {
       const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng);
@@ -135,15 +150,21 @@ export default {
 
         // Send notification within 0–1 minutes before the prayer time
         if (diff >= 0 && diff <= 1) {
+          console.log(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} now=${currentLocalMinutes} prayerTime=${prayerMinutes} diff=${diff}`);
           const result = await sendPush(env, sub, prayer.name);
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);
+            pushesSent++;
           } else if (result.statusCode === 404 || result.statusCode === 410) {
             // Subscription expired / removed — clean up
             await removeSubscription(env, sub.endpoint);
+            deadRemoved++;
           }
         }
       }
     }
+
+    const elapsedMs = Date.now() - startTime;
+    console.log(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed`);
   },
 };

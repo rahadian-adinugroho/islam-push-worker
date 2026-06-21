@@ -53,12 +53,15 @@ export async function sendPush(
 
   try {
     await webpush.sendNotification(pushSub, payload);
+    console.log(`[push] ok: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer}`);
     return { ok: true };
   } catch (error: unknown) {
     const err = error as { statusCode?: number; message?: string };
     if (err.statusCode === 404 || err.statusCode === 410) {
+      console.log(`[push] dead (${err.statusCode}): sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer}`);
       return { ok: false, statusCode: err.statusCode };
     }
+    console.error(`[push] failed: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer} status=${err.statusCode} msg=${err.message}`);
     throw error;
   }
 }
