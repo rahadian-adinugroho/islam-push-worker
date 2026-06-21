@@ -7,6 +7,7 @@ export interface PushSubscription {
   lat: number;
   lng: number;
   timezone: string;
+  locale: string;
   notify_fajr: number;
   notify_dhuhr: number;
   notify_asr: number;
@@ -25,7 +26,7 @@ export interface SubscriptionPreferences {
 }
 
 const SUBSCRIPTION_COLUMNS =
-  'endpoint, keys_p256dh, keys_auth, lat, lng, timezone, ' +
+  'endpoint, keys_p256dh, keys_auth, lat, lng, timezone, locale, ' +
   'notify_fajr, notify_dhuhr, notify_asr, notify_maghrib, notify_isha, ' +
   'last_notified_prayer, last_notified_date';
 
@@ -35,13 +36,14 @@ export async function addSubscription(
   lat: number,
   lng: number,
   timezone: string,
+  locale: string,
   preferences: SubscriptionPreferences,
 ): Promise<void> {
   await env.DB.prepare(
     `INSERT OR REPLACE INTO subscriptions (
-      endpoint, keys_p256dh, keys_auth, lat, lng, timezone,
+      endpoint, keys_p256dh, keys_auth, lat, lng, timezone, locale,
       notify_fajr, notify_dhuhr, notify_asr, notify_maghrib, notify_isha
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   )
     .bind(
       sub.endpoint,
@@ -50,6 +52,7 @@ export async function addSubscription(
       lat,
       lng,
       timezone,
+      locale,
       preferences.fajr ? 1 : 0,
       preferences.dhuhr ? 1 : 0,
       preferences.asr ? 1 : 0,

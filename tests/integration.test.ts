@@ -100,6 +100,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'Asia/Jakarta',
+      'id',
       { fajr: true, dhuhr: true, asr: false, maghrib: true, isha: true },
     );
 
@@ -109,6 +110,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
     expect(subs[0].lat).toBe(-6.2);
     expect(subs[0].lng).toBe(106.8);
     expect(subs[0].timezone).toBe('Asia/Jakarta');
+    expect(subs[0].locale).toBe('id');
     expect(subs[0].notify_fajr).toBe(1);
     expect(subs[0].notify_dhuhr).toBe(1);
     expect(subs[0].notify_asr).toBe(0);
@@ -124,27 +126,29 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'Asia/Jakarta',
+      'en',
       { fajr: true },
     );
     mockSendNotification.mockResolvedValue({ statusCode: 201 });
 
     // Lookup (simulating /api/test-push handler)
     const stmt = env.DB.prepare(
-      'SELECT endpoint, keys_p256dh, keys_auth FROM subscriptions WHERE endpoint = ?',
+      'SELECT endpoint, keys_p256dh, keys_auth, locale FROM subscriptions WHERE endpoint = ?',
     ).bind(ENDPOINT);
-    const sub = await stmt.first<{ endpoint: string; keys_p256dh: string; keys_auth: string }>();
+    const sub = await stmt.first<{ endpoint: string; keys_p256dh: string; keys_auth: string; locale: string }>();
 
     expect(sub).not.toBeNull();
     expect(sub!.endpoint).toBe(ENDPOINT);
     expect(sub!.keys_p256dh).toBe('p256dh');
     expect(sub!.keys_auth).toBe('auth');
+    expect(sub!.locale).toBe('en');
 
     // Send push
     const result = await sendPush(ENV, {
       endpoint: sub!.endpoint,
       keys_p256dh: sub!.keys_p256dh,
       keys_auth: sub!.keys_auth,
-    }, 'fajr');
+    }, 'fajr', sub!.locale as 'en' | 'id');
 
     expect(result.ok).toBe(true);
     expect(mockSendNotification).toHaveBeenCalledTimes(1);
@@ -164,6 +168,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'Asia/Jakarta',
+      'en',
       { fajr: true },
     );
     const error = new Error('Gone') as Error & { statusCode: number };
@@ -172,9 +177,9 @@ describe('integration: subscribe → test-push → mark notified', () => {
 
     // Lookup
     const stmt = env.DB.prepare(
-      'SELECT endpoint, keys_p256dh, keys_auth FROM subscriptions WHERE endpoint = ?',
+      'SELECT endpoint, keys_p256dh, keys_auth, locale FROM subscriptions WHERE endpoint = ?',
     ).bind(ENDPOINT);
-    const sub = await stmt.first<{ endpoint: string; keys_p256dh: string; keys_auth: string }>();
+    const sub = await stmt.first<{ endpoint: string; keys_p256dh: string; keys_auth: string; locale: string }>();
     expect(sub).not.toBeNull();
 
     // Send push — returns { ok: false, statusCode: 410 }
@@ -182,7 +187,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       endpoint: sub!.endpoint,
       keys_p256dh: sub!.keys_p256dh,
       keys_auth: sub!.keys_auth,
-    }, 'fajr');
+    }, 'fajr', sub!.locale as 'en' | 'id');
     expect(result.ok).toBe(false);
     expect(result.statusCode).toBe(410);
 
@@ -208,6 +213,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'Asia/Jakarta',
+      'en',
       { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
     );
 
@@ -233,6 +239,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'Asia/Jakarta',
+      'en',
       { fajr: true },
     );
 
@@ -248,6 +255,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       -6.2,
       106.8,
       'UTC',
+      'en',
       { fajr: false },
     );
     const subs2 = await getActiveSubscriptions(env);

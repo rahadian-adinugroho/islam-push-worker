@@ -38,7 +38,7 @@ describe('sendPush', () => {
   it('returns { ok: true } when notification succeeds', async () => {
     mockSendNotification.mockResolvedValue({ statusCode: 201 });
 
-    const result = await sendPush(ENV, SUBSCRIPTION, 'maghrib');
+    const result = await sendPush(ENV, SUBSCRIPTION, 'maghrib', 'en');
 
     expect(result).toEqual({ ok: true });
     expect(mockSetVapidDetails).toHaveBeenCalledWith(
@@ -63,7 +63,7 @@ describe('sendPush', () => {
     error.statusCode = 410;
     mockSendNotification.mockRejectedValue(error);
 
-    const result = await sendPush(ENV, SUBSCRIPTION, 'fajr');
+    const result = await sendPush(ENV, SUBSCRIPTION, 'fajr', 'en');
     expect(result).toEqual({ ok: false, statusCode: 410 });
   });
 
@@ -72,7 +72,7 @@ describe('sendPush', () => {
     error.statusCode = 404;
     mockSendNotification.mockRejectedValue(error);
 
-    const result = await sendPush(ENV, SUBSCRIPTION, 'fajr');
+    const result = await sendPush(ENV, SUBSCRIPTION, 'fajr', 'en');
     expect(result).toEqual({ ok: false, statusCode: 404 });
   });
 
@@ -80,19 +80,32 @@ describe('sendPush', () => {
     const error = new Error('Network failure');
     mockSendNotification.mockRejectedValue(error);
 
-    await expect(sendPush(ENV, SUBSCRIPTION, 'fajr')).rejects.toThrow('Network failure');
+    await expect(sendPush(ENV, SUBSCRIPTION, 'fajr', 'en')).rejects.toThrow('Network failure');
   });
 
-  it('generates correct tag and body for each prayer', async () => {
+  it('generates correct tag and body for each prayer in English', async () => {
     mockSendNotification.mockResolvedValue({ statusCode: 201 });
 
     const prayers: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
     for (const prayer of prayers) {
-      await sendPush(ENV, SUBSCRIPTION, prayer);
+      await sendPush(ENV, SUBSCRIPTION, prayer, 'en');
       const [_, payload] = mockSendNotification.mock.calls[mockSendNotification.mock.calls.length - 1];
       const parsed = JSON.parse(payload);
       expect(parsed.tag).toBe(`prayer-${prayer}`);
-      expect(parsed.body).toContain(prayer.charAt(0).toUpperCase() + prayer.slice(1));
+      expect(parsed.title).toBe('Prayer Time');
+      const expectedName = prayer.charAt(0).toUpperCase() + prayer.slice(1);
+      expect(parsed.body).toContain(expectedName);
     }
+  });
+
+  it('uses Indonesian locale for notification title and body', async () => {
+    mockSendNotification.mockResolvedValue({ statusCode: 201 });
+
+    await sendPush(ENV, SUBSCRIPTION, 'fajr', 'id');
+    const [_, payload] = mockSendNotification.mock.calls[0];
+    const parsed = JSON.parse(payload);
+    expect(parsed.title).toBe('Waktu Sholat');
+    expect(parsed.body).toBe('Waktu Subuh');
+    expect(parsed.tag).toBe('prayer-fajr');
   });
 });
