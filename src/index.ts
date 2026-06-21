@@ -93,6 +93,39 @@ export default {
           return jsonResponse({ ok: true }, 200, headers);
         }
 
+        case '/api/test-push': {
+          // Debug endpoint: send a push to a specific subscription on demand.
+          // Looks up the subscription from D1 (parameterized query, safe from
+          // SQL injection) and sends a test push via web-push.
+          const { endpoint, prayer = 'fajr' } = body as {
+            endpoint?: string;
+            prayer?: string;
+          };
+
+          if (!endpoint) {
+            return jsonResponse({ error: 'Missing endpoint' }, 400, headers);
+          }
+
+          const sub = await env.DB.prepare(
+            'SELECT endpoint, keys_p256dh, keys_auth FROM subscriptions WHERE endpoint = ?',
+          )
+            .bind(endpoint)
+            .first<{ endpoint: string; keys_p256dh: string; keys_auth: string }>();
+
+          if (!sub) {
+            log.warn(`[test-push] subscription not found: ${endpoint.slice(0, 50)}...`);
+            return jsonResponse({ error: 'Subscription not found' }, 404, headers);
+          }
+
+          const result = await sendPush(env, {
+            endpoint: sub.endpoint,
+            keys_p256dh: sub.keys_p256dh,
+            keys_auth: sub.keys_auth,
+          }, prayer as PrayerName);
+          log.info(`[test-push] result for ${endpoint.slice(0, 50)}... prayer=${prayer}: ok=${result.ok} statusCode=${result.statusCode ?? 'n/a'}`);
+          return jsonResponse(result, result.ok ? 200 : 500, headers);
+        }
+
         default:
           log.warn(`[fetch] 404: ${url.pathname}`);
           return jsonResponse({ error: 'Not Found' }, 404, headers);
