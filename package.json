@@ -1,0 +1,26 @@
+{
+  "name": "islam-push-worker",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "adhan": "^4.0.0",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20240620.0",
+    "@vitest/coverage-istanbul": "^4.1.9",
+    "happy-dom": "^15.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^4.1.9",
+    "wrangler": "^3.80.0"
+  }
+}
