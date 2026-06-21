@@ -15,6 +15,7 @@ import {
 import { sendPush } from './push';
 import { log, initLogger } from './logger';
 import { corsHeaders } from './cors';
+import { normalizeLocale } from './i18n';
 
 export interface Env {
   DB: D1Database;
@@ -51,12 +52,13 @@ export default {
 
       switch (url.pathname) {
         case '/api/subscribe': {
-          const { endpoint, keys, lat, lng, timezone, preferences } = body as {
+          const { endpoint, keys, lat, lng, timezone, locale, preferences } = body as {
             endpoint?: string;
             keys?: { p256dh?: string; auth?: string };
             lat?: number;
             lng?: number;
             timezone?: string;
+            locale?: string;
             preferences?: Record<string, boolean>;
           };
 
@@ -66,8 +68,9 @@ export default {
           }
 
           const prefs = preferences ?? {};
-          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, prefs);
-          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} prefs=${JSON.stringify(prefs)}`);
+          const normalizedLocale = normalizeLocale(locale);
+          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, normalizedLocale, prefs);
+          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} locale=${normalizedLocale} prefs=${JSON.stringify(prefs)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -107,10 +110,10 @@ export default {
           }
 
           const sub = await env.DB.prepare(
-            'SELECT endpoint, keys_p256dh, keys_auth FROM subscriptions WHERE endpoint = ?',
+            'SELECT endpoint, keys_p256dh, keys_auth, locale FROM subscriptions WHERE endpoint = ?',
           )
             .bind(endpoint)
-            .first<{ endpoint: string; keys_p256dh: string; keys_auth: string }>();
+            .first<{ endpoint: string; keys_p256dh: string; keys_auth: string; locale: string }>();
 
           if (!sub) {
             log.warn(`[test-push] subscription not found: ${endpoint.slice(0, 50)}...`);
@@ -121,7 +124,7 @@ export default {
             endpoint: sub.endpoint,
             keys_p256dh: sub.keys_p256dh,
             keys_auth: sub.keys_auth,
-          }, prayer as PrayerName);
+          }, prayer as PrayerName, normalizeLocale(sub.locale));
           log.info(`[test-push] result for ${endpoint.slice(0, 50)}... prayer=${prayer}: ok=${result.ok} statusCode=${result.statusCode ?? 'n/a'}`);
           return jsonResponse(result, result.ok ? 200 : 500, headers);
         }
@@ -177,7 +180,7 @@ export default {
         // Send notification within 0–1 minutes before the prayer time
         if (diff >= 0 && diff <= 1) {
           log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} now=${currentLocalMinutes} prayerTime=${prayerMinutes} diff=${diff}`);
-          const result = await sendPush(env, sub, prayer.name);
+          const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);
             pushesSent++;

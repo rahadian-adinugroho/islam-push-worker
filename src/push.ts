@@ -1,6 +1,7 @@
 import webpush from 'web-push';
 import type { PrayerName } from './prayer-times';
 import { log } from './logger';
+import { getNotificationTitle, type Locale } from './i18n';
 
 export interface PushResult {
   ok: boolean;
@@ -27,6 +28,7 @@ export async function sendPush(
     keys_auth: string;
   },
   prayer: PrayerName,
+  locale: Locale = 'en',
 ): Promise<PushResult> {
   webpush.setVapidDetails(
     env.VAPID_SUBJECT,
@@ -42,11 +44,11 @@ export async function sendPush(
     },
   };
 
-  const title = `It's time for ${prayer.charAt(0).toUpperCase() + prayer.slice(1)} prayer`;
+  const { title, body } = getNotificationTitle(prayer, locale);
 
   const payload = JSON.stringify({
-    title: 'Prayer Time',
-    body: title,
+    title,
+    body,
     icon: '/icon.png',
     tag: `prayer-${prayer}`,
     data: { prayer },
