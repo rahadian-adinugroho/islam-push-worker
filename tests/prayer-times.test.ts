@@ -41,9 +41,12 @@ describe('getTodayPrayerTimes', () => {
 
   it('prayer times are in chronological order', () => {
     const times = getTodayPrayerTimes(-6.2, 106.8);
-    const minutes = times.map((t) => getPrayerTimeMinutes(t.time));
-    for (let i = 1; i < minutes.length; i++) {
-      expect(minutes[i]).toBeGreaterThan(minutes[i - 1]);
+    // Compare Date objects directly (compares UTC time internally).
+    // This correctly handles timezone wrap-around: in CI (UTC), Jakarta's
+    // Fajr at 04:36 local = 21:36 UTC previous day, so getHours()/getMinutes()
+    // would return wrong values, but Date comparison works correctly.
+    for (let i = 1; i < times.length; i++) {
+      expect(times[i].time.getTime()).toBeGreaterThan(times[i - 1].time.getTime());
     }
   });
 
