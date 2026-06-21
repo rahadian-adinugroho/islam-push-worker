@@ -14,6 +14,7 @@ database_id = "53ff7dbb-8b53-4b9d-91fd-2ba56aef3e84"
 [vars]
 VAPID_PUBLIC_KEY = "BO52m2RzNMPmB1E8ZeShL6uDgtx8qjSHjwkW7nt5AP2kqPUhilePDf_Vki89XUB3nqQ63jv7qBYaLqkgcDWi-DY"
 VAPID_SUBJECT = "mailto:admin@raharoho.me"
+LOG_LEVEL = "info"
 
 [observability]
 enabled = true

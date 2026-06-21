@@ -13,12 +13,14 @@ import {
   markNotified,
 } from './db';
 import { sendPush } from './push';
+import { log, initLogger } from './logger';
 
 export interface Env {
   DB: D1Database;
   VAPID_PUBLIC_KEY: string;
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
+  LOG_LEVEL?: string;
 }
 
 const ALLOWED_ORIGINS = ['https://islam.raharoho.me', 'http://localhost:5173'];
@@ -39,11 +41,12 @@ function jsonResponse(body: unknown, status: number, headers: Record<string, str
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    initLogger(env);
     const origin = request.headers.get('Origin');
     const headers = corsHeaders(origin);
     const url = new URL(request.url);
 
-    console.log(`[fetch] ${request.method} ${url.pathname}`);
+    log.debug(`[fetch] ${request.method} ${url.pathname}`);
 
     // CORS preflight
     if (request.method === 'OPTIONS') {
@@ -69,13 +72,13 @@ export default {
           };
 
           if (!endpoint || !keys?.p256dh || !keys?.auth || lat == null || lng == null || !timezone) {
-            console.log(`[subscribe] rejected: missing fields from ${endpoint?.slice(0, 50) ?? 'unknown'}`);
+            log.warn(`[subscribe] rejected: missing fields from ${endpoint?.slice(0, 50) ?? 'unknown'}`);
             return jsonResponse({ error: 'Missing required fields: endpoint, keys, lat, lng, timezone' }, 400, headers);
           }
 
           const prefs = preferences ?? {};
           await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, prefs);
-          console.log(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} prefs=${JSON.stringify(prefs)}`);
+          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} prefs=${JSON.stringify(prefs)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -86,7 +89,7 @@ export default {
           }
 
           await removeSubscription(env, endpoint);
-          console.log(`[unsubscribe] ok: ${endpoint.slice(0, 50)}...`);
+          log.info(`[unsubscribe] ok: ${endpoint.slice(0, 50)}...`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -97,26 +100,27 @@ export default {
           }
 
           await updatePreferences(env, endpoint, preferences);
-          console.log(`[preferences] ok: ${endpoint.slice(0, 50)}... prefs=${JSON.stringify(preferences)}`);
+          log.info(`[preferences] ok: ${endpoint.slice(0, 50)}... prefs=${JSON.stringify(preferences)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
         default:
-          console.log(`[fetch] 404: ${url.pathname}`);
+          log.warn(`[fetch] 404: ${url.pathname}`);
           return jsonResponse({ error: 'Not Found' }, 404, headers);
       }
     } catch (err) {
-      console.error(`[fetch] error: ${err instanceof Error ? err.message : String(err)}`);
+      log.error(`[fetch] error: ${err instanceof Error ? err.message : String(err)}`);
       return jsonResponse({ error: 'Internal Server Error' }, 500, headers);
     }
   },
 
   async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext): Promise<void> {
+    initLogger(env);
     const startTime = Date.now();
-    console.log(`[scheduled] cron triggered at ${new Date().toISOString()}`);
+    log.info(`[scheduled] cron triggered at ${new Date().toISOString()}`);
 
     const subscriptions = await getActiveSubscriptions(env);
-    console.log(`[scheduled] found ${subscriptions.length} active subscription(s)`);
+    log.debug(`[scheduled] found ${subscriptions.length} active subscription(s)`);
 
     let pushesSent = 0;
     let deadRemoved = 0;
@@ -150,7 +154,7 @@ export default {
 
         // Send notification within 0–1 minutes before the prayer time
         if (diff >= 0 && diff <= 1) {
-          console.log(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} now=${currentLocalMinutes} prayerTime=${prayerMinutes} diff=${diff}`);
+          log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} now=${currentLocalMinutes} prayerTime=${prayerMinutes} diff=${diff}`);
           const result = await sendPush(env, sub, prayer.name);
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);
@@ -165,6 +169,6 @@ export default {
     }
 
     const elapsedMs = Date.now() - startTime;
-    console.log(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed`);
+    log.info(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed`);
   },
 };
