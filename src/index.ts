@@ -52,14 +52,14 @@ export default {
 
       switch (url.pathname) {
         case '/api/subscribe': {
-          const { endpoint, keys, lat, lng, timezone, locale, preferences } = body as {
+          const { endpoint, keys, lat, lng, timezone, locale, prefs } = body as {
             endpoint?: string;
             keys?: { p256dh?: string; auth?: string };
             lat?: number;
             lng?: number;
             timezone?: string;
             locale?: string;
-            preferences?: Record<string, boolean>;
+            prefs?: Record<string, boolean>;
           };
 
           if (!endpoint || !keys?.p256dh || !keys?.auth || lat == null || lng == null || !timezone) {
@@ -67,10 +67,10 @@ export default {
             return jsonResponse({ error: 'Missing required fields: endpoint, keys, lat, lng, timezone' }, 400, headers);
           }
 
-          const prefs = preferences ?? {};
+          const preferences = prefs ?? {};
           const normalizedLocale = normalizeLocale(locale);
-          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, normalizedLocale, prefs);
-          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} locale=${normalizedLocale} prefs=${JSON.stringify(prefs)}`);
+          await addSubscription(env, { endpoint, keys: { p256dh: keys.p256dh, auth: keys.auth } }, lat, lng, timezone, normalizedLocale, preferences);
+          log.info(`[subscribe] ok: ${endpoint.slice(0, 50)}... tz=${timezone} lat=${lat.toFixed(2)} locale=${normalizedLocale} prefs=${JSON.stringify(preferences)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
@@ -86,13 +86,13 @@ export default {
         }
 
         case '/api/preferences': {
-          const { endpoint, preferences } = body as { endpoint?: string; preferences?: Record<string, boolean> };
-          if (!endpoint || !preferences) {
-            return jsonResponse({ error: 'Missing endpoint or preferences' }, 400, headers);
+          const { endpoint, prefs } = body as { endpoint?: string; prefs?: Record<string, boolean> };
+          if (!endpoint || !prefs) {
+            return jsonResponse({ error: 'Missing endpoint or prefs' }, 400, headers);
           }
 
-          await updatePreferences(env, endpoint, preferences);
-          log.info(`[preferences] ok: ${endpoint.slice(0, 50)}... prefs=${JSON.stringify(preferences)}`);
+          await updatePreferences(env, endpoint, prefs);
+          log.info(`[preferences] ok: ${endpoint.slice(0, 50)}... prefs=${JSON.stringify(prefs)}`);
           return jsonResponse({ ok: true }, 200, headers);
         }
 
