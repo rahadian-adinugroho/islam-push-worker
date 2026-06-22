@@ -163,6 +163,7 @@ export default {
 
       const todayStr = getTodayDateString(timezone);
       const calcMethod = normalizeCalcMethod(sub.calc_method);
+      log.debug(`[scheduled] sub=${sub.endpoint.slice(0, 50)}... calc_method=${calcMethod} (raw=${sub.calc_method}) tz=${timezone} lat=${sub.lat.toFixed(2)} lng=${sub.lng.toFixed(2)}`);
       const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, calcMethod, timezone);
       const now = Date.now();
 
