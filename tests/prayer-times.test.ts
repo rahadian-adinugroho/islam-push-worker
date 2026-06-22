@@ -21,6 +21,7 @@ import {
   getLocalToday,
   getTodayDateString,
 } from '../src/prayer-times';
+import { PrayerTimes, CalculationMethod, Coordinates } from 'adhan';
 
 describe('getTodayPrayerTimes', () => {
   it('returns 5 prayer entries for Jakarta', () => {
@@ -126,6 +127,42 @@ describe('getTodayPrayerTimes', () => {
     for (const entry of times) {
       expect(isNaN(entry.time.getTime())).toBe(false);
     }
+  });
+
+  it('singapore method applies Kemenag RI ihtiyat adjustments (+2 min)', () => {
+    // Verify the ihtiyat (precautionary) adjustments from singaporeWithIhtiyat()
+    const coords = new Coordinates(-6.2, 106.8);
+    // Raw adhan Singapore without adjustments
+    const rawParams = CalculationMethod.Singapore();
+    const rawPt = new PrayerTimes(coords, new Date(), rawParams);
+
+    // Our wrapper goes through singaporeWithIhtiyat()
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'singapore', 'Asia/Jakarta');
+
+    // Each mandatory prayer should be exactly +2 min from raw
+    const prayerMap: Record<string, 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'> = {
+      fajr: 'fajr',
+      dhuhr: 'dhuhr',
+      asr: 'asr',
+      maghrib: 'maghrib',
+      isha: 'isha',
+    };
+    for (const [id, key] of Object.entries(prayerMap)) {
+      const ourTime = times.find((t) => t.id === id)!.time;
+      const diffMs = ourTime.getTime() - rawPt[key].getTime();
+      expect(diffMs).toBe(120_000);
+    }
+  });
+
+  it('default (unknown method) also applies ihtiyat (same factory)', () => {
+    // Both 'singapore' and 'default' branches use the same singaporeWithIhtiyat()
+    const coords = new Coordinates(-6.2, 106.8);
+    const rawParams = CalculationMethod.Singapore();
+    const rawPt = new PrayerTimes(coords, new Date(), rawParams);
+
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'nonexistent', 'Asia/Jakarta');
+    const isha = times.find((t) => t.id === 'isha')!.time;
+    expect(isha.getTime() - rawPt.isha.getTime()).toBe(120_000);
   });
 });
 

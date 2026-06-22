@@ -1,94 +1,117 @@
 # islam-push-worker
 
-A Cloudflare Worker that sends prayer time push notifications to registered users of [islam.raharoho.me](https://islam.raharoho.me). It handles push subscription management (registration/unsubscription) via HTTP fetch and delivers timely push notifications for each prayer window via a cron-triggered scheduled handler.
+Cloudflare Worker that sends push notifications for prayer times to PWA subscribers. Runs every minute via cron, computes prayer times per user's coordinates and calculation method, and delivers VAPID-signed web push notifications.
+
+## Features
+
+- **Web Push notifications** — VAPID-signed push delivery via `web-push`
+- **Scheduled cron handler** — runs every minute to check and fire notifications
+- **Locale-aware** — notification title/body in English or Indonesian (`locale` column)
+- **Calculation methods** — supports 8 methods (singapore, MWL, UmmAlQura, etc.), stored per user in D1
+- **Kemenag RI ihtiyat adjustments** — +2 min precautionary offsets for Singapore method (matches PWA)
+- **Timezone from coordinates** — uses `@photostructure/tz-lookup` to derive timezone from lat/lng (no client trust)
+- **Epoch-based comparison** — timezone-agnostic prayer time matching using `Date.getTime()`
+- **Late-only notification window** — PN fires at or after prayer time, never before (configurable via `PN_BUFFER_SECONDS`)
+- **D1 database** — persistent subscription storage with push state tracking
 
 ## Architecture
 
-The Worker is built on Cloudflare's Workers platform and uses:
-
-- **Cloudflare Workers** — handles both HTTP fetch requests and scheduled (cron) events.
-- **Cloudflare D1** — stores user subscription data and notification state.
-- **Web Push Protocol** — delivers encrypted push notifications to subscribed browsers using the VAPID protocol.
-
-### Request handling
-
-| Event      | Trigger                                | Purpose                                      |
-| ---------- | -------------------------------------- | -------------------------------------------- |
-| `fetch`    | HTTP requests from the islam app       | Register/unregister push subscriptions       |
-| `scheduled`| Cron trigger (every minute)            | Check prayer times and send push notifications |
+```
+src/
+├── index.ts          # fetch handlers + scheduled cron handler
+├── push.ts           # VAPID-signed push notification delivery
+├── prayer-times.ts   # adhan wrapper with ihtiyat adjustments
+├── db.ts             # D1 query helpers (CRUD, preferences, notification state)
+├── i18n.ts           # locale normalization + calculation method normalization
+├── timezone.ts       # timezone derivation from coordinates via geo-tz
+├── cors.ts           # CORS header generation
+└── logger.ts         # level-based logger (debug/info/warn/error)
+```
 
 ## D1 Schema
 
-The Worker uses a single `subscriptions` table in the `islam-push-db` D1 database:
+The `subscriptions` table in `islam-push-db`:
 
 | Column                | Type    | Description                                      |
 | --------------------- | ------- | ------------------------------------------------ |
 | `endpoint`            | TEXT PK | Push subscription endpoint URL                   |
-| `keys_p256dh`         | TEXT    | Client public key for ECDH key agreement         |
+| `keys_p256dh`         | TEXT    | Client public key for ECDH                       |
 | `keys_auth`           | TEXT    | Client auth secret                               |
-| `lat`                 | REAL    | User's latitude (for prayer time calculation)    |
+| `lat`                 | REAL    | User's latitude                                  |
 | `lng`                 | REAL    | User's longitude                                 |
-| `timezone`            | TEXT    | User's IANA timezone string                      |
-| `notify_fajr`         | INTEGER | Opt-in for Fajr notification (0 or 1)            |
-| `notify_dhuhr`        | INTEGER | Opt-in for Dhuhr notification                    |
-| `notify_asr`          | INTEGER | Opt-in for Asr notification                      |
-| `notify_maghrib`      | INTEGER | Opt-in for Maghrib notification                  |
-| `notify_isha`         | INTEGER | Opt-in for Isha notification                     |
-| `last_notified_prayer`| TEXT    | Last prayer name a notification was sent for     |
-| `last_notified_date`  | TEXT    | Date (YYYY-MM-DD) of the last notification       |
+| `timezone`            | TEXT    | Client-provided timezone (stored but not trusted) |
+| `locale`              | TEXT    | Notification locale (en/id)                      |
+| `calc_method`         | TEXT    | Calculation method ID (e.g. singapore)           |
+| `notify_fajr`         | INTEGER | Opt-in for Fajr (0 or 1)                         |
+| `notify_dhuhr`        | INTEGER | Opt-in for Dhuhr                                 |
+| `notify_asr`          | INTEGER | Opt-in for Asr                                   |
+| `notify_maghrib`      | INTEGER | Opt-in for Maghrib                               |
+| `notify_isha`         | INTEGER | Opt-in for Isha                                  |
+| `last_notified_prayer`| TEXT    | Last prayer notified                             |
+| `last_notified_date`  | TEXT    | Date (YYYY-MM-DD) of last notification           |
+| `created_at`          | TEXT    | Row creation timestamp                           |
 
-## Local Development
+## Migrations
 
-Prerequisites: [Bun](https://bun.sh), [Wrangler](https://developers.cloudflare.com/workers/wrangler/), and [1Password CLI](https://developer.1password.com/docs/cli/) (for secrets).
+| File                                     | Purpose                                      |
+| ---------------------------------------- | -------------------------------------------- |
+| `migrations/0001_init.sql`               | Create subscriptions table                   |
+| `migrations/0002_add_locale.sql`         | Add locale column                            |
+| `migrations/0003_add_calc_method.sql`    | Add calc_method column (default MWL)         |
+| `migrations/0004_fix_default_calc_method.sql` | Backfill old rows to singapore            |
+
+Apply migrations locally:
+```bash
+wrangler d1 migrations apply islam-push-db --local
+```
+
+## Environment variables
+
+### Plain text (set in `wrangler.toml [vars]`)
+
+| Var                 | Default | Description                                |
+| ------------------- | ------- | ------------------------------------------ |
+| `VAPID_PUBLIC_KEY`  | *(set)* | VAPID public key for Web Push              |
+| `VAPID_SUBJECT`     | *(set)* | `mailto:` URL for VAPID contact            |
+| `LOG_LEVEL`         | `debug` | Log level: debug, info, warn, error, none  |
+| `PN_BUFFER_SECONDS` | `30`    | Seconds after prayer time to fire PN       |
+
+### Secrets (set via `wrangler secret put`)
+
+| Secret              | Description                              |
+| ------------------- | ---------------------------------------- |
+| `VAPID_PRIVATE_KEY` | VAPID private key for Web Push           |
+
+## Local development
 
 ```bash
 # Install dependencies
 bun install
 
-# Start the dev server (uses 1Password to inject secrets)
+# Start dev server
 op run -- wrangler dev
 
-# Apply D1 migrations to the local database
+# Apply D1 migrations locally
 wrangler d1 migrations apply islam-push-db --local
-```
 
-## Secrets
-
-The following secret must be set in the Cloudflare Worker environment:
-
-| Secret            | Description                        |
-| ----------------- | ---------------------------------- |
-| `VAPID_PRIVATE_KEY` | VAPID private key for Web Push   |
-
-Set it via Wrangler:
-
-```bash
-wrangler secret put VAPID_PRIVATE_KEY
-```
-
-The corresponding `VAPID_PUBLIC_KEY` is also used by the islam app frontend and should be set in that environment. Its value is:
-
-```
-BO52m2RzNMPmB1E8ZeShL6uDgtx8qjSHjwkW7nt5AP2kqPUhilePDf_Vki89XUB3nqQ63jv7qBYaLqkgcDWi-DY
-```
-
-## Testing
-
-```bash
 # Run tests
 bun run test
 
 # Run tests with coverage
 bun run test:coverage
+
+# TypeScript check
+bun run typecheck
+
+# Deploy
+bun run deploy
 ```
 
 ## CI/CD
 
-Two GitHub Actions workflows are configured:
+| Workflow      | Trigger                    | Action                                    |
+| ------------- | -------------------------- | ----------------------------------------- |
+| `test.yml`    | PRs and pushes             | Run tests + lint                          |
+| `deploy.yml`  | Push to `main`             | Migrations → deploy to Cloudflare         |
 
-| Workflow    | Trigger                    | Purpose                                      |
-| ----------- | -------------------------- | -------------------------------------------- |
-| `test.yml`  | Pull requests and pushes   | Run tests and linting on every change        |
-| `deploy.yml`| Push to `main` branch      | Deploy the Worker to Cloudflare              |
-
-Deployments happen automatically when code is merged or pushed to `main`.
+Deployments run on every push to `main`. The cron trigger (`* * * * *`) fires every minute.
