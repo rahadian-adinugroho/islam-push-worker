@@ -59,7 +59,7 @@ describe('getTodayPrayerTimes', () => {
     expect(equator).toHaveLength(5);
   });
 
-  it('defaults to muslimWorldLeague when no method given', () => {
+  it('defaults to singapore when no method given', () => {
     const times = getTodayPrayerTimes(-6.2, 106.8);
     expect(times).toHaveLength(5);
   });
@@ -96,7 +96,7 @@ describe('getTodayPrayerTimes', () => {
     }
   });
 
-  it('falls back to muslimWorldLeague for unknown method', () => {
+  it('falls back to singapore for unknown method', () => {
     const times = getTodayPrayerTimes(-6.2, 106.8, 'nonexistent');
     expect(times).toHaveLength(5);
   });

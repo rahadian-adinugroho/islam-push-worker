@@ -11,7 +11,7 @@ const ALL_PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 /**
  * Map a calculation method name to its adhan equivalent.
- * Defaults to MuslimWorldLeague for unknown values.
+ * Defaults to Singapore for unknown or null values.
  */
 function getCalculationMethod(method: string): CalculationMethod {
   switch (method) {
@@ -32,7 +32,7 @@ function getCalculationMethod(method: string): CalculationMethod {
     case 'turkey':
       return CalculationMethod.Turkey();
     default:
-      return CalculationMethod.MuslimWorldLeague();
+      return CalculationMethod.Singapore();
   }
 }
 
@@ -64,7 +64,7 @@ export function getLocalToday(timezone: string): Date {
 /**
  * Calculate today's prayer times for a given location.
  *
- * @param method - calculation method (default: 'muslimWorldLeague')
+ * @param method - calculation method (default: 'singapore')
  * @param timezone - IANA timezone for "today" computation. If omitted,
  *                   uses UTC (which can be the wrong day for users
  *                   far from UTC during their early morning hours).
@@ -72,7 +72,7 @@ export function getLocalToday(timezone: string): Date {
 export function getTodayPrayerTimes(
   lat: number,
   lng: number,
-  method: string = 'muslimWorldLeague',
+  method: string = 'singapore',
   timezone?: string,
 ): PrayerTimeEntry[] {
   const coords = new Coordinates(lat, lng);
