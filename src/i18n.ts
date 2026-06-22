@@ -29,11 +29,11 @@ const VALID_METHODS = new Set([
   'karachi', 'northAmerica', 'tehran', 'turkey',
 ]);
 
-/** Normalize a calculation method string, defaulting to 'muslimWorldLeague'. */
+/** Normalize a calculation method string, defaulting to 'singapore'. */
 export function normalizeCalcMethod(input: string | null | undefined): string {
-  if (!input) return 'muslimWorldLeague';
+  if (!input) return 'singapore';
   if (VALID_METHODS.has(input)) return input;
-  return 'muslimWorldLeague';
+  return 'singapore';
 }
 
 /** Get the localized notification title and body for a prayer. */

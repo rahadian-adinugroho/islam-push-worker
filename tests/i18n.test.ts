@@ -135,15 +135,15 @@ describe('getNotificationTitle', () => {
 
 describe('normalizeCalcMethod', () => {
   it('returns default for null', () => {
-    expect(normalizeCalcMethod(null)).toBe('muslimWorldLeague');
+    expect(normalizeCalcMethod(null)).toBe('singapore');
   });
 
   it('returns default for undefined', () => {
-    expect(normalizeCalcMethod(undefined)).toBe('muslimWorldLeague');
+    expect(normalizeCalcMethod(undefined)).toBe('singapore');
   });
 
   it('returns default for empty string', () => {
-    expect(normalizeCalcMethod('')).toBe('muslimWorldLeague');
+    expect(normalizeCalcMethod('')).toBe('singapore');
   });
 
   it('returns valid methods as-is', () => {
@@ -157,6 +157,6 @@ describe('normalizeCalcMethod', () => {
   });
 
   it('returns default for unknown method', () => {
-    expect(normalizeCalcMethod('invalidMethod')).toBe('muslimWorldLeague');
+    expect(normalizeCalcMethod('invalidMethod')).toBe('singapore');
   });
 });
