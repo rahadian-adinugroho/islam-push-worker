@@ -12,18 +12,17 @@ import { PrayerTimes, CalculationMethod, Coordinates } from 'adhan';
 //   Coordinates: (-6.3015809959844615, 106.65029044835221)
 //   Date: 2026-06-22
 //   D1 row has calc_method: "singapore"
-//   Suspected cause: Worker using MWL (17°) instead of Singapore (18°)
 //
-// Findings from direct adhan computation:
-//   Singapore (18°) → Isha at 12:04 UTC (19:04 Jakarta)
-//   MWL (17°)      → Isha at 11:59 UTC (18:59 Jakarta)
-//   Difference: 5 minutes, NOT 2 minutes as user expected
+// ROOT CAUSE: The PWA applies Kemenag RI ihtiyat (precautionary)
+// adjustments of +2 minutes for all prayers when using the Singapore
+// method (see website/islam/src/scripts/prayer-times.ts:52-60).
+// The Worker was not applying these adjustments.
 //
-// Conclusion: The Worker correctly uses Singapore method and computes
-// Isha at 19:04 Jakarta. The PWA's 19:06 cannot be reproduced with
-// adhan's Singapore method for these coordinates on this date.
-// The 2-minute discrepancy is NOT between Singapore and MWL, but
-// between the Worker (adhan) and the PWA (possibly different lib).
+// Fix: Added ihtiyat adjustments to the Singapore method in
+// getCalculationMethod() (src/prayer-times.ts).
+//
+// Raw adhan Singapore (no adjustments): Isha at 12:04 UTC (19:04 Jakarta)
+// PWA / fixed Worker:                   Isha at 12:06 UTC (19:06 Jakarta)
 // ---------------------------------------------------------------------------
 
 const LAT = -6.3015809959844615;
@@ -32,7 +31,7 @@ const DATE_UTC = new Date('2026-06-22T00:00:00.000Z');
  const JAKARTA_FMT = { timeZone: 'Asia/Jakarta', hour: '2-digit', minute: '2-digit', hour12: false } as const;
 
 describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
-  it('Singapore method computes Isha at 12:04 UTC (19:04 Jakarta)', () => {
+  it('RAW adhan Singapore (no ihtiyat) computes Isha at 12:04 UTC (19:04 Jakarta)', () => {
     const coords = new Coordinates(LAT, LNG);
     const params = CalculationMethod.Singapore();
     const pt = new PrayerTimes(coords, DATE_UTC, params);
@@ -40,7 +39,7 @@ describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
     const ishaUtc = pt.isha.toISOString();
     const ishaJakarta = new Intl.DateTimeFormat('en-GB', JAKARTA_FMT).format(pt.isha);
 
-    // Expected from adhan library
+    // Raw adhan without adjustments — matches the unpatched Worker
     expect(ishaUtc).toMatch(/T12:04:00/);
     expect(ishaJakarta).toBe('19:04');
   });
@@ -57,7 +56,7 @@ describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
     expect(ishaJakarta).toBe('18:59');
   });
 
-  it('Singapore and MWL differ by 5 min (300000ms), not 2 min', () => {
+  it('RAW Singapore and MWL differ by 5 min (300000ms), not 2 min', () => {
     const coords = new Coordinates(LAT, LNG);
     const singaporePt = new PrayerTimes(coords, DATE_UTC, CalculationMethod.Singapore());
     const mwlPt = new PrayerTimes(coords, DATE_UTC, CalculationMethod.MuslimWorldLeague());
@@ -66,31 +65,14 @@ describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
     expect(diffMs).toBe(300_000); // 5 minutes
   });
 
-  it('PWA expected value 19:06 cannot be reproduced with Singapore method', () => {
-    // Check if any nearby dates give 19:06
-    let found = false;
-    for (let dayOffset = -2; dayOffset <= 2; dayOffset++) {
-      const d = new Date(DATE_UTC);
-      d.setUTCDate(d.getUTCDate() + dayOffset);
-      const coords = new Coordinates(LAT, LNG);
-      const pt = new PrayerTimes(coords, d, CalculationMethod.Singapore());
-      const jakarta = new Intl.DateTimeFormat('en-GB', JAKARTA_FMT).format(pt.isha);
-      if (jakarta === '19:06') {
-        found = true;
-        break;
-      }
-    }
-    // None of the adjacent dates give 19:06 with Singapore method
-    expect(found).toBe(false);
-  });
-
-  it('getTodayPrayerTimes with singapore method produces same result', () => {
-    // This tests the actual code path used in the scheduled handler
+  it('FIXED Worker (with ihtiyat) produces Isha at 19:06 Jakarta (12:06 UTC)', () => {
+    // This tests the Worker's code path AFTER the ihtiyat fix.
     const times = getTodayPrayerTimes(LAT, LNG, 'singapore', 'Asia/Jakarta');
     const isha = times.find(t => t.id === 'isha')!;
     const ishaJakarta = new Intl.DateTimeFormat('en-GB', JAKARTA_FMT).format(isha.time);
 
-    expect(ishaJakarta).toBe('19:04');
+    // Now matches the PWA with +2 minute ihtiyat adjustments
+    expect(ishaJakarta).toBe('19:06');
   });
 
   it('getTodayPrayerTimes with MWL produces 18:59 Jakarta', () => {
@@ -99,6 +81,20 @@ describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
     const ishaJakarta = new Intl.DateTimeFormat('en-GB', JAKARTA_FMT).format(isha.time);
 
     expect(ishaJakarta).toBe('18:59');
+  });
+
+  it('Singapore + ihtiyat adjustments produce +2 min for each prayer', () => {
+    const coords = new Coordinates(LAT, LNG);
+    const raw = CalculationMethod.Singapore();
+    const adjusted = CalculationMethod.Singapore();
+    adjusted.adjustments = { fajr: 2, sunrise: -2, dhuhr: 2, asr: 2, maghrib: 2, isha: 2 };
+
+    const rawPt = new PrayerTimes(coords, DATE_UTC, raw);
+    const adjPt = new PrayerTimes(coords, DATE_UTC, adjusted);
+
+    expect(adjPt.fajr.getTime() - rawPt.fajr.getTime()).toBe(120_000);
+    expect(adjPt.dhuhr.getTime() - rawPt.dhuhr.getTime()).toBe(120_000);
+    expect(adjPt.isha.getTime() - rawPt.isha.getTime()).toBe(120_000);
   });
 });
 

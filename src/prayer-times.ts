@@ -15,8 +15,19 @@ const ALL_PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
  */
 function getCalculationMethod(method: string): CalculationMethod {
   switch (method) {
-    case 'singapore':
-      return CalculationMethod.Singapore();
+    case 'singapore': {
+      const params = CalculationMethod.Singapore();
+      // Kemenag RI ihtiyat (precautionary) adjustments — matches PWA behavior
+      params.adjustments = {
+        fajr: 2,
+        sunrise: -2,
+        dhuhr: 2,
+        asr: 2,
+        maghrib: 2,
+        isha: 2,
+      };
+      return params;
+    }
     case 'ummAlQura':
       return CalculationMethod.UmmAlQura();
     case 'muslimWorldLeague':
