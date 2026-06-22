@@ -9,6 +9,15 @@ export interface PushResult {
 }
 
 /**
+ * VAPID config is constant within a single cron run (env values don't change).
+ * Track the last-seen values so we only call setVapidDetails when they change,
+ * avoiding repeated key validation on every sendPush call.
+ */
+let lastVapidSubject: string | undefined;
+let lastVapidPublicKey: string | undefined;
+let lastVapidPrivateKey: string | undefined;
+
+/**
  * VAPID-signed push notification for a given subscription and prayer.
  *
  * Returns `{ ok: true }` on success.
@@ -32,11 +41,23 @@ export async function sendPush(
   locale: Locale = 'en',
   ttl?: number,
 ): Promise<PushResult> {
-  webpush.setVapidDetails(
-    env.VAPID_SUBJECT,
-    env.VAPID_PUBLIC_KEY,
-    env.VAPID_PRIVATE_KEY,
-  );
+  // Only re-set VAPID details when the env values actually change (e.g., first
+  // call in a cron run, or after a config update). Avoids redundant key
+  // validation on every push within the same run.
+  if (
+    lastVapidSubject !== env.VAPID_SUBJECT ||
+    lastVapidPublicKey !== env.VAPID_PUBLIC_KEY ||
+    lastVapidPrivateKey !== env.VAPID_PRIVATE_KEY
+  ) {
+    webpush.setVapidDetails(
+      env.VAPID_SUBJECT,
+      env.VAPID_PUBLIC_KEY,
+      env.VAPID_PRIVATE_KEY,
+    );
+    lastVapidSubject = env.VAPID_SUBJECT;
+    lastVapidPublicKey = env.VAPID_PUBLIC_KEY;
+    lastVapidPrivateKey = env.VAPID_PRIVATE_KEY;
+  }
 
   const pushSub = {
     endpoint: subscription.endpoint,
