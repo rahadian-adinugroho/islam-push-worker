@@ -163,8 +163,10 @@ export default {
 
       const todayStr = getTodayDateString(timezone);
       const calcMethod = normalizeCalcMethod(sub.calc_method);
+      const locale = normalizeLocale(sub.locale);
       log.debug(`[scheduled] sub=${sub.endpoint.slice(0, 50)}... calc_method=${calcMethod} (raw=${sub.calc_method}) tz=${timezone} lat=${sub.lat.toFixed(2)} lng=${sub.lng.toFixed(2)}`);
       const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, calcMethod, timezone);
+      const prayerTimesByPrayer = new Map(prayerTimes.map((pt) => [pt.id, pt]));
       const now = Date.now();
 
       const prayerChecks: { name: PrayerName; enabled: boolean }[] = [
@@ -178,7 +180,7 @@ export default {
       for (const prayer of prayerChecks) {
         if (!prayer.enabled) continue;
 
-        const prayerTime = prayerTimes.find((pt) => pt.id === prayer.name);
+        const prayerTime = prayerTimesByPrayer.get(prayer.name);
         if (!prayerTime) continue;
 
         // Already notified for this prayer today
@@ -195,7 +197,7 @@ export default {
         // minute). last_notified guard prevents double-firing.
         if (diffMs >= 0 && diffMs <= windowEndMs) {
           log.debug(`[scheduled] sending PN: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs} ts=${new Date().toISOString()}`);
-          const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
+          const result = await sendPush(env, sub, prayer.name, locale);
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);
             pushesSent++;
