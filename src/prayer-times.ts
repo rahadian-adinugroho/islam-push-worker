@@ -37,17 +37,42 @@ function getCalculationMethod(method: string): CalculationMethod {
 }
 
 /**
- * Calculate today's prayer times for a given location using the
- * specified calculation method (default: 'muslimWorldLeague').
+ * Return a Date whose UTC components represent the user's local "today".
+ * adhan extracts year/month/date from the Date, so this ensures prayer
+ * times are computed for the user's local calendar day (not UTC day).
+ *
+ * Example: at 02:00 Jakarta time on Jan 2 (= 19:00 UTC Jan 1), this
+ * returns a Date for Jan 2 — so adhan computes Jan 2's prayer times.
+ */
+export function getLocalToday(timezone: string): Date {
+  const now = new Date();
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: timezone,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).formatToParts(now);
+  const get = (type: string) => parts.find((p) => p.type === type)!.value;
+  return new Date(Date.UTC(+get('year'), +get('month') - 1, +get('day')));
+}
+
+/**
+ * Calculate today's prayer times for a given location.
+ *
+ * @param method - calculation method (default: 'muslimWorldLeague')
+ * @param timezone - IANA timezone for "today" computation. If omitted,
+ *                   uses UTC (which can be the wrong day for users
+ *                   far from UTC during their early morning hours).
  */
 export function getTodayPrayerTimes(
   lat: number,
   lng: number,
   method: string = 'muslimWorldLeague',
+  timezone?: string,
 ): PrayerTimeEntry[] {
   const coords = new Coordinates(lat, lng);
   const params = getCalculationMethod(method);
-  const date = new Date();
+  const date = timezone ? getLocalToday(timezone) : new Date();
   const times = new PrayerTimes(coords, date, params) as Record<string, unknown>;
 
   return ALL_PRAYERS.map((id) => ({
@@ -57,33 +82,9 @@ export function getTodayPrayerTimes(
 }
 
 /**
- * Extract the minutes-since-midnight from a prayer time Date.
- *
- * adhan stores local prayer time via the system-local Date constructor, so
- * getHours / getMinutes always return the intended local clock time
- * regardless of the runtime's timezone (UTC in Workers, local in dev).
- */
-export function getPrayerTimeMinutes(prayerTime: Date): number {
-  return prayerTime.getHours() * 60 + prayerTime.getMinutes();
-}
-
-/**
- * Return the current time in the given IANA timezone expressed as
- * minutes since midnight.
- */
-export function getCurrentLocalMinutes(timezone: string): number {
-  const now = new Date();
-  const formatter = new Intl.DateTimeFormat('en-GB', {
-    timeZone: timezone,
-    hour: '2-digit',
-    minute: '2-digit',
-  });
-  const [h, m] = formatter.format(now).split(':').map(Number);
-  return h * 60 + m;
-}
-
-/**
  * Return today's date (YYYY-MM-DD) in the given IANA timezone.
+ * Used for last_notified_date tracking (one notification per
+ * prayer per local day).
  */
 export function getTodayDateString(timezone: string): string {
   return new Date().toLocaleDateString('en-CA', { timeZone: timezone });

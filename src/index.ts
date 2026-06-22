@@ -1,7 +1,5 @@
 import {
   getTodayPrayerTimes,
-  getPrayerTimeMinutes,
-  getCurrentLocalMinutes,
   getTodayDateString,
   type PrayerName,
 } from './prayer-times';
@@ -16,6 +14,7 @@ import { sendPush } from './push';
 import { log, initLogger } from './logger';
 import { corsHeaders } from './cors';
 import { normalizeLocale, normalizeCalcMethod } from './i18n';
+import { getTimezoneFromCoords } from './timezone';
 
 export interface Env {
   DB: D1Database;
@@ -153,9 +152,12 @@ export default {
     let deadRemoved = 0;
 
     for (const sub of subscriptions) {
-      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, sub.calc_method);
-      const currentLocalMinutes = getCurrentLocalMinutes(sub.timezone);
-      const todayStr = getTodayDateString(sub.timezone);
+      // Derive timezone from coords — don't trust the client-provided timezone
+      const timezone = getTimezoneFromCoords(sub.lat, sub.lng);
+
+      const todayStr = getTodayDateString(timezone);
+      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, sub.calc_method, timezone);
+      const now = Date.now();
 
       const prayerChecks: { name: PrayerName; enabled: boolean }[] = [
         { name: 'fajr', enabled: sub.notify_fajr === 1 },
@@ -176,12 +178,12 @@ export default {
           continue;
         }
 
-        const prayerMinutes = getPrayerTimeMinutes(prayerTime.time);
-        const diff = prayerMinutes - currentLocalMinutes;
+        // Epoch comparison: timezone-agnostic
+        const diffMs = prayerTime.time.getTime() - now;
 
         // Send notification within 0–1 minutes before the prayer time
-        if (diff >= 0 && diff <= 1) {
-          log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} now=${currentLocalMinutes} prayerTime=${prayerMinutes} diff=${diff}`);
+        if (diffMs >= 0 && diffMs <= 60_000) {
+          log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs}`);
           const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);

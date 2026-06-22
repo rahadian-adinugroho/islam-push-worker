@@ -18,8 +18,7 @@ afterEach(() => {
 
 import {
   getTodayPrayerTimes,
-  getPrayerTimeMinutes,
-  getCurrentLocalMinutes,
+  getLocalToday,
   getTodayDateString,
 } from '../src/prayer-times';
 
@@ -41,10 +40,6 @@ describe('getTodayPrayerTimes', () => {
 
   it('prayer times are in chronological order', () => {
     const times = getTodayPrayerTimes(-6.2, 106.8);
-    // Compare Date objects directly (compares UTC time internally).
-    // This correctly handles timezone wrap-around: in CI (UTC), Jakarta's
-    // Fajr at 04:36 local = 21:36 UTC previous day, so getHours()/getMinutes()
-    // would return wrong values, but Date comparison works correctly.
     for (let i = 1; i < times.length; i++) {
       expect(times[i].time.getTime()).toBeGreaterThan(times[i - 1].time.getTime());
     }
@@ -53,10 +48,10 @@ describe('getTodayPrayerTimes', () => {
   it('can calculate for different coordinates', () => {
     const jakarta = getTodayPrayerTimes(-6.2, 106.8);
     const london = getTodayPrayerTimes(51.5, -0.1);
-    const jakartaMinutes = jakarta.map((t) => getPrayerTimeMinutes(t.time));
-    const londonMinutes = london.map((t) => getPrayerTimeMinutes(t.time));
+    const jakartaTimes = jakarta.map((t) => t.time.getTime());
+    const londonTimes = london.map((t) => t.time.getTime());
     // Different locations, different times
-    expect(jakartaMinutes).not.toEqual(londonMinutes);
+    expect(jakartaTimes).not.toEqual(londonTimes);
   });
 
   it('handles edge-case coordinates (equator, poles)', () => {
@@ -82,9 +77,9 @@ describe('getTodayPrayerTimes', () => {
     const muslimWorldLeague = getTodayPrayerTimes(35.7, 139.7, 'muslimWorldLeague');
     const ummAlQura = getTodayPrayerTimes(35.7, 139.7, 'ummAlQura');
     // Use Tokyo coords with two methods — they should differ for at least one prayer
-    const mwlMinutes = muslimWorldLeague.map((t) => getPrayerTimeMinutes(t.time));
-    const uaqMinutes = ummAlQura.map((t) => getPrayerTimeMinutes(t.time));
-    expect(mwlMinutes).not.toEqual(uaqMinutes);
+    const mwlTimes = muslimWorldLeague.map((t) => t.time.getTime());
+    const uaqTimes = ummAlQura.map((t) => t.time.getTime());
+    expect(mwlTimes).not.toEqual(uaqTimes);
   });
 
   it('accepts all valid methods without error', () => {
@@ -105,49 +100,35 @@ describe('getTodayPrayerTimes', () => {
     const times = getTodayPrayerTimes(-6.2, 106.8, 'nonexistent');
     expect(times).toHaveLength(5);
   });
-});
 
-describe('getPrayerTimeMinutes', () => {
-  it('converts Date to minutes since midnight', () => {
-    // Use local-time constructor so the test is timezone-independent
-    // (adhan creates Dates the same way — new Date(year, month, day, hours, minutes))
-    const d = new Date(2026, 5, 21, 4, 30);
-    expect(getPrayerTimeMinutes(d)).toBe(4 * 60 + 30);
-  });
-
-  it('midnight is 0', () => {
-    const d = new Date(2026, 5, 21, 0, 0);
-    expect(getPrayerTimeMinutes(d)).toBe(0);
-  });
-
-  it('end of day is 1439', () => {
-    const d = new Date(2026, 5, 21, 23, 59);
-    expect(getPrayerTimeMinutes(d)).toBe(23 * 60 + 59);
+  it('accepts timezone parameter and produces correct local-day times', () => {
+    // Jakarta (UTC+7) at midnight UTC = 07:00 local on June 21
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'muslimWorldLeague', 'Asia/Jakarta');
+    expect(times).toHaveLength(5);
+    for (const entry of times) {
+      expect(isNaN(entry.time.getTime())).toBe(false);
+    }
   });
 });
 
-describe('getCurrentLocalMinutes', () => {
-  it('returns current local time in minutes for UTC', () => {
-    // MOCK_NOW is 2026-06-21T00:00:00.000Z (midnight UTC)
-    const mins = getCurrentLocalMinutes('UTC');
-    expect(mins).toBe(0);
+describe('getLocalToday', () => {
+  it('returns UTC date for UTC timezone', () => {
+    // MOCK_NOW is 2026-06-21T00:00:00.000Z
+    const local = getLocalToday('UTC');
+    expect(local.getTime()).toBe(new Date(Date.UTC(2026, 5, 21)).getTime());
   });
 
-  it('returns correct offset for Asia/Jakarta (UTC+7)', () => {
-    const mins = getCurrentLocalMinutes('Asia/Jakarta');
-    // MOCK_NOW is midnight UTC = 07:00 in Jakarta
-    expect(mins).toBe(7 * 60);
+  it('returns correct date for Asia/Jakarta (UTC+7)', () => {
+    // MOCK_NOW is midnight UTC = 07:00 WIB on June 21
+    const local = getLocalToday('Asia/Jakarta');
+    expect(local.getTime()).toBe(new Date(Date.UTC(2026, 5, 21)).getTime());
   });
 
-  it('returns correct offset for America/New_York (UTC-4 in June)', () => {
-    const mins = getCurrentLocalMinutes('America/New_York');
-    // MOCK_NOW is midnight UTC = 20:00 (previous day) in NY EDT (UTC-4)
-    // 2026-06-21 is after DST change, so EDT = UTC-4
-    // 00:00 UTC = 20:00 EDT (previous day)
-    // But wait, the formatter will give us 20:00 on the same day...
-    // Actually June 21 00:00 UTC = June 20 20:00 EDT
-    // The formatter with timeZone: 'America/New_York' will return "20:00"
-    expect(mins).toBe(20 * 60);
+  it('returns previous date for timezone behind UTC', () => {
+    // MOCK_NOW is midnight UTC = 14:00 HST on June 20 (UTC-10)
+    const local = getLocalToday('Pacific/Honolulu');
+    // Should be June 20, 2026
+    expect(local.getTime()).toBe(new Date(Date.UTC(2026, 5, 20)).getTime());
   });
 });
 
@@ -166,11 +147,8 @@ describe('getTodayDateString', () => {
 
   it('returns next day for timezones ahead of UTC', () => {
     // MOCK_NOW is 2026-06-21 00:00 UTC
-    // In Sydney (UTC+10) it's 2026-06-21 10:00, still same date
-    // But for Chatham Islands (UTC+12:45) it's 2026-06-21 12:45
-    // Let's use Kiribati (UTC+14) - it's 14:00 on the same day
+    // In Kiribati (UTC+14) it's 14:00 on June 21
     const str = getTodayDateString('Pacific/Kiritimati');
-    // UTC+14: 2026-06-21 14:00 - still June 21
     expect(str).toBe('2026-06-21');
   });
 });
