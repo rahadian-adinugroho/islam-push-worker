@@ -20,7 +20,7 @@ VAPID_SUBJECT = "mailto:admin@raharoho.me"
 LOG_LEVEL = "debug"
 # How many seconds after the prayer time the PN should fire. Default 30.
 # Set higher for more delay, lower for less. Never fires before the prayer time.
-PN_BUFFER_SECONDS = "30"
+PN_BUFFER_SECONDS = "60"
 
 [observability]
 enabled = true
