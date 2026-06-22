@@ -22,6 +22,9 @@ export interface Env {
   VAPID_PRIVATE_KEY: string;
   VAPID_SUBJECT: string;
   LOG_LEVEL?: string;
+  /** How many seconds after the prayer time the PN should fire. Default 30.
+   *  Set to 0 to fire at the exact prayer time (within cron-jitter tolerance). */
+  PN_BUFFER_SECONDS?: string;
 }
 
 function jsonResponse(body: unknown, status: number, headers: Record<string, string>): Response {
@@ -151,6 +154,9 @@ export default {
     let pushesSent = 0;
     let deadRemoved = 0;
 
+    const bufferSeconds = parseInt(env.PN_BUFFER_SECONDS ?? '30', 10);
+    const windowEndMs = (bufferSeconds + 60) * 1000;
+
     for (const sub of subscriptions) {
       // Derive timezone from coords — don't trust the client-provided timezone
       const timezone = getTimezoneFromCoords(sub.lat, sub.lng);
@@ -182,11 +188,12 @@ export default {
         // Epoch comparison: timezone-agnostic
         const diffMs = prayerTime.time.getTime() - now;
 
-        // Send notification within 0–1 minutes before the prayer time.
-        // Allow up to 60s late (cron jitter guard) — last_notified guard
-        // prevents double-firing.
-        if (diffMs >= -60_000 && diffMs <= 60_000) {
-          log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs}`);
+        // Send notification at or after the prayer time. Better late than early
+        // for prayer. PN_BUFFER_SECONDS controls how many seconds after the
+        // prayer time we target; +60s grace covers cron jitter (cron is every
+        // minute). last_notified guard prevents double-firing.
+        if (diffMs >= 0 && diffMs <= windowEndMs) {
+          log.debug(`[scheduled] sending PN: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs} ts=${new Date().toISOString()}`);
           const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
           if (result.ok) {
             await markNotified(env, sub.endpoint, prayer.name, todayStr);
@@ -201,6 +208,6 @@ export default {
     }
 
     const elapsedMs = Date.now() - startTime;
-    log.info(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed`);
+    log.info(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed (buffer=${bufferSeconds}s)`);
   },
 };

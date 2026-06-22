@@ -18,6 +18,9 @@ database_id = "53ff7dbb-8b53-4b9d-91fd-2ba56aef3e84"
 VAPID_PUBLIC_KEY = "BO52m2RzNMPmB1E8ZeShL6uDgtx8qjSHjwkW7nt5AP2kqPUhilePDf_Vki89XUB3nqQ63jv7qBYaLqkgcDWi-DY"
 VAPID_SUBJECT = "mailto:admin@raharoho.me"
 LOG_LEVEL = "debug"
+# How many seconds after the prayer time the PN should fire. Default 30.
+# Set higher for more delay, lower for less. Never fires before the prayer time.
+PN_BUFFER_SECONDS = "60"
 
 [observability]
 enabled = true
