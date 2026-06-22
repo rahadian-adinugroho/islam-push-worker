@@ -101,17 +101,22 @@ describe('getTodayPrayerTimes', () => {
     expect(times).toHaveLength(5);
   });
 
-  it('uses epoch comparison that works regardless of system timezone', () => {
+  it('epoch comparison: Fajr UTC instant is early morning Jakarta', () => {
     // This test would have caught the original bug where getPrayerTimeMinutes
     // used getHours() which returns system-local time (UTC in Workers).
-    // Epoch ms comparison is timezone-agnostic.
+    // Using getHours() in UTC would report Fajr as ~21, not ~04-06.
+    // Epoch ms comparison is timezone-agnostic and correct.
     const times = getTodayPrayerTimes(-6.2, 106.8, 'singapore', 'Asia/Jakarta');
-    const now = Date.now();
-    for (const t of times) {
-      const diff = t.time.getTime() - now;
-      // diff should be a finite number (could be negative for past prayers, positive for future)
-      expect(Number.isFinite(diff)).toBe(true);
-    }
+    const fajr = times.find((t) => t.id === 'fajr')!;
+    // Fajr should be between 04:00-06:00 Jakarta time
+    const fajrJakartaHour = new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Asia/Jakarta',
+      hour: '2-digit',
+      hour12: false,
+    }).format(fajr.time);
+    const hour = Number(fajrJakartaHour);
+    expect(hour).toBeGreaterThanOrEqual(4);
+    expect(hour).toBeLessThanOrEqual(6);
   });
 
   it('accepts timezone parameter and produces correct local-day times', () => {

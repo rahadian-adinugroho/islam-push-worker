@@ -19,7 +19,7 @@ describe('getTimezoneFromCoords', () => {
 
   it('returns Etc/GMT for mid-ocean coordinates (no timezone polygon)', () => {
     // Coordinates in the middle of the Atlantic Ocean
-    // geo-tz returns Etc/GMT for the null island (0, 0)
+    // @photostructure/tz-lookup returns Etc/GMT for null island (0, 0)
     const tz = getTimezoneFromCoords(0, 0);
     expect(tz).toBe('Etc/GMT');
   });

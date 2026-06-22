@@ -36,7 +36,7 @@ export async function addSubscription(
   sub: { endpoint: string; keys: { p256dh: string; auth: string } },
   lat: number,
   lng: number,
-  timezone: string,
+  timezone: string | undefined,
   locale: string,
   calcMethod: string,
   preferences: SubscriptionPreferences,

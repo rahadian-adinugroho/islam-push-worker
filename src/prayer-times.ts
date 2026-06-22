@@ -92,5 +92,9 @@ export function getTodayPrayerTimes(
  * prayer per local day).
  */
 export function getTodayDateString(timezone: string): string {
-  return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+  try {
+    return new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+  } catch {
+    return new Date().toLocaleDateString('en-CA');
+  }
 }
