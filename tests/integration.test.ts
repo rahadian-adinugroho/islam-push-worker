@@ -271,53 +271,66 @@ describe('integration: subscribe → test-push → mark notified', () => {
 });
 
 describe('PN notification window', () => {
-  it('fires when diffMs is 0 (at prayer time)', () => {
+  it('fires at prayer time (diffMs = 0)', () => {
     const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    expect(0 <= 0 && 0 >= windowStartMs).toBe(true);
   });
 
-  it('fires when diffMs is positive and within window', () => {
+  it('fires shortly after prayer (diffMs negative, within window)', () => {
     const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(45_000 >= 0 && 45_000 <= windowEndMs).toBe(true);
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    // 30s after prayer — well within the default 90s window
+    expect((-30_000) <= 0 && (-30_000) >= windowStartMs).toBe(true);
   });
 
-  it('does NOT fire when diffMs is negative (before prayer)', () => {
+  it('fires 19s after prayer (realistic cron-jitter scenario)', () => {
     const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect((-1_000) >= 0 && (-1_000) <= windowEndMs).toBe(false);
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    // cron fires 19s late, prayer just happened
+    expect((-19_000) <= 0 && (-19_000) >= windowStartMs).toBe(true);
   });
 
-  it('does NOT fire when diffMs exceeds (buffer + 60) * 1000', () => {
+  it('does NOT fire before prayer (diffMs positive)', () => {
     const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect((windowEndMs + 1) >= 0 && (windowEndMs + 1) <= windowEndMs).toBe(false);
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    // 1s before prayer — prayer hasn't happened yet
+    expect((+1_000) <= 0 && (+1_000) >= windowStartMs).toBe(false);
   });
 
-  it('respects PN_BUFFER_SECONDS=0 (fire at exact prayer time)', () => {
+  it('does NOT fire when too far after prayer (diffMs exceeds window)', () => {
+    const bufferSeconds = 30;
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    // 91s after prayer — outside the 90s window
+    expect((-91_000) <= 0 && (-91_000) >= windowStartMs).toBe(false);
+  });
+
+  it('respects PN_BUFFER_SECONDS=0 (fire only within 60s grace window)', () => {
     const bufferSeconds = 0;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
     // At prayer time
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
-    // Just after prayer time (within cron grace)
-    expect(30_000 >= 0 && 30_000 <= windowEndMs).toBe(true);
-    // Past the grace window
-    expect(90_000 >= 0 && 90_000 <= windowEndMs).toBe(false);
+    expect(0 <= 0 && 0 >= windowStartMs).toBe(true);
+    // 30s after (within 60s grace)
+    expect((-30_000) <= 0 && (-30_000) >= windowStartMs).toBe(true);
+    // 61s after (past 60s grace)
+    expect((-61_000) <= 0 && (-61_000) >= windowStartMs).toBe(false);
   });
 
-  it('respects PN_BUFFER_SECONDS=120 (allow 2min buffer + 1min grace)', () => {
+  it('respects PN_BUFFER_SECONDS=120 (allow up to 3 min after prayer)', () => {
     const bufferSeconds = 120;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
-    expect(150_000 >= 0 && 150_000 <= windowEndMs).toBe(true);
-    expect(200_000 >= 0 && 200_000 <= windowEndMs).toBe(false);
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
+    // At prayer time
+    expect(0 <= 0 && 0 >= windowStartMs).toBe(true);
+    // 2min 30s after (within 180s window)
+    expect((-150_000) <= 0 && (-150_000) >= windowStartMs).toBe(true);
+    // 3min 1s after (outside 180s window)
+    expect((-181_000) <= 0 && (-181_000) >= windowStartMs).toBe(false);
   });
 
   it('default buffer is 30 seconds when env var is not set', () => {
     // This tests the fallback in the scheduled handler logic
     // (env.PN_BUFFER_SECONDS ?? '30' falls back to '30' when undefined)
-    const windowEndMs = (30 + 60) * 1000;
-    expect(windowEndMs).toBe(90_000);
+    const windowStartMs = -(30 + 60) * 1000;
+    expect(windowStartMs).toBe(-90_000);
   });
 });

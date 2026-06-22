@@ -155,7 +155,9 @@ export default {
     let deadRemoved = 0;
 
     const bufferSeconds = parseInt(env.PN_BUFFER_SECONDS ?? '30', 10);
-    const windowEndMs = (bufferSeconds + 60) * 1000;
+    // Window: [-(buffer+60)s, 0] — fire from at-prayer-time to
+    // (buffer+60)s after. +60s grace covers cron jitter.
+    const windowStartMs = -(bufferSeconds + 60) * 1000;
 
     for (const sub of subscriptions) {
       // Derive timezone from coords — don't trust the client-provided timezone
@@ -189,10 +191,11 @@ export default {
         const diffMs = prayerTime.time.getTime() - now;
 
         // Send notification at or after the prayer time. Better late than early
-        // for prayer. PN_BUFFER_SECONDS controls how many seconds after the
-        // prayer time we target; +60s grace covers cron jitter (cron is every
-        // minute). last_notified guard prevents double-firing.
-        if (diffMs >= 0 && diffMs <= windowEndMs) {
+        // for prayer. diffMs = prayerTime - now, so diffMs <= 0 means prayer
+        // is in the past. PN_BUFFER_SECONDS controls how many seconds after
+        // the prayer time we allow; +60s grace covers cron jitter (cron is
+        // every minute). last_notified guard prevents double-firing.
+        if (diffMs <= 0 && diffMs >= windowStartMs) {
           log.debug(`[scheduled] sending PN: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs} ts=${new Date().toISOString()}`);
           const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
           if (result.ok) {
