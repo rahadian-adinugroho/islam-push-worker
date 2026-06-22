@@ -1,17 +1,17 @@
-import { find } from 'geo-tz';
+import tzlookup from '@photostructure/tz-lookup';
 
 /**
- * Derive the IANA timezone for a given lat/lng using the geo-tz
- * database. Most locations return a single timezone; disputed
- * boundaries may return multiple — we take the first.
+ * Derive the IANA timezone for a given lat/lng using the
+ * photostructure/tz-lookup database.
  *
- * Falls back to 'UTC' if the lookup fails (e.g., mid-ocean).
+ * Most locations return a single timezone. Falls back to 'UTC'
+ * if the lookup fails (e.g., mid-ocean, invalid coords).
  */
 export function getTimezoneFromCoords(lat: number, lng: number): string {
   try {
-    const results = find(lat, lng);
-    if (results && results.length > 0) {
-      return results[0];
+    const result = tzlookup(lat, lng);
+    if (result) {
+      return result;
     }
   } catch {
     // Fall through to UTC

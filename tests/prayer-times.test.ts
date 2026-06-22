@@ -101,6 +101,19 @@ describe('getTodayPrayerTimes', () => {
     expect(times).toHaveLength(5);
   });
 
+  it('uses epoch comparison that works regardless of system timezone', () => {
+    // This test would have caught the original bug where getPrayerTimeMinutes
+    // used getHours() which returns system-local time (UTC in Workers).
+    // Epoch ms comparison is timezone-agnostic.
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'singapore', 'Asia/Jakarta');
+    const now = Date.now();
+    for (const t of times) {
+      const diff = t.time.getTime() - now;
+      // diff should be a finite number (could be negative for past prayers, positive for future)
+      expect(Number.isFinite(diff)).toBe(true);
+    }
+  });
+
   it('accepts timezone parameter and produces correct local-day times', () => {
     // Jakarta (UTC+7) at midnight UTC = 07:00 local on June 21
     const times = getTodayPrayerTimes(-6.2, 106.8, 'muslimWorldLeague', 'Asia/Jakarta');

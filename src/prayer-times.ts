@@ -45,15 +45,20 @@ function getCalculationMethod(method: string): CalculationMethod {
  * returns a Date for Jan 2 — so adhan computes Jan 2's prayer times.
  */
 export function getLocalToday(timezone: string): Date {
-  const now = new Date();
-  const parts = new Intl.DateTimeFormat('en-CA', {
-    timeZone: timezone,
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-  }).formatToParts(now);
-  const get = (type: string) => parts.find((p) => p.type === type)!.value;
-  return new Date(Date.UTC(+get('year'), +get('month') - 1, +get('day')));
+  try {
+    const now = new Date();
+    const parts = new Intl.DateTimeFormat('en-CA', {
+      timeZone: timezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).formatToParts(now);
+    const get = (type: string) => parts.find((p) => p.type === type)!.value;
+    return new Date(Date.UTC(+get('year'), +get('month') - 1, +get('day')));
+  } catch {
+    // Invalid timezone — fall back to UTC today
+    return new Date();
+  }
 }
 
 /**

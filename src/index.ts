@@ -62,9 +62,9 @@ export default {
             prefs?: Record<string, boolean>;
           };
 
-          if (!endpoint || !keys?.p256dh || !keys?.auth || lat == null || lng == null || !timezone) {
+          if (!endpoint || !keys?.p256dh || !keys?.auth || lat == null || lng == null) {
             log.warn(`[subscribe] rejected: missing fields from ${endpoint?.slice(0, 50) ?? 'unknown'}`);
-            return jsonResponse({ error: 'Missing required fields: endpoint, keys, lat, lng, timezone' }, 400, headers);
+            return jsonResponse({ error: 'Missing required fields: endpoint, keys, lat, lng' }, 400, headers);
           }
 
           const preferences = prefs ?? {};
@@ -181,8 +181,10 @@ export default {
         // Epoch comparison: timezone-agnostic
         const diffMs = prayerTime.time.getTime() - now;
 
-        // Send notification within 0–1 minutes before the prayer time
-        if (diffMs >= 0 && diffMs <= 60_000) {
+        // Send notification within 0–1 minutes before the prayer time.
+        // Allow up to 60s late (cron jitter guard) — last_notified guard
+        // prevents double-firing.
+        if (diffMs >= -60_000 && diffMs <= 60_000) {
           log.debug(`[scheduled] match: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs}`);
           const result = await sendPush(env, sub, prayer.name, normalizeLocale(sub.locale));
           if (result.ok) {
