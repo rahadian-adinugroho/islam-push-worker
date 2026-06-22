@@ -96,6 +96,13 @@ describe('Isha reproduction — actual coords (2026-06-22, Jakarta)', () => {
     expect(adjPt.dhuhr.getTime() - rawPt.dhuhr.getTime()).toBe(120_000);
     expect(adjPt.isha.getTime() - rawPt.isha.getTime()).toBe(120_000);
   });
+
+  it('default (unknown method) also applies ihtiyat — Isha at 19:06', () => {
+    const times = getTodayPrayerTimes(LAT, LNG, 'unknownMethod', 'Asia/Jakarta');
+    const isha = times.find(t => t.id === 'isha')!;
+    const ishaJakarta = new Intl.DateTimeFormat('en-GB', JAKARTA_FMT).format(isha.time);
+    expect(ishaJakarta).toBe('19:06');
+  });
 });
 
 describe('Isha method dispatch — adhan mock', () => {
