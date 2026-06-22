@@ -24,6 +24,13 @@ const ENV = {
   VAPID_SUBJECT: 'mailto:test@example.com',
 };
 
+const ENV_WITH_TTL = {
+  VAPID_PUBLIC_KEY: 'test-public-key',
+  VAPID_PRIVATE_KEY: 'test-private-key',
+  VAPID_SUBJECT: 'mailto:test@example.com',
+  PN_TTL_SECONDS: '3600',
+};
+
 const SUBSCRIPTION = {
   endpoint: 'https://fcm.googleapis.com/fcm/send/test',
   keys_p256dh: 'test-p256dh',
@@ -107,5 +114,46 @@ describe('sendPush', () => {
     expect(parsed.title).toBe('Waktu Sholat');
     expect(parsed.body).toBe('Waktu Subuh');
     expect(parsed.tag).toBe('prayer-fajr');
+  });
+
+  describe('TTL option', () => {
+    it('passes default TTL (21600) when env var is not set', async () => {
+      mockSendNotification.mockResolvedValue({ statusCode: 201 });
+      await sendPush(ENV, SUBSCRIPTION, 'fajr', 'en');
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        { TTL: 21600 },
+      );
+    });
+
+    it('passes env var TTL when PN_TTL_SECONDS is set', async () => {
+      mockSendNotification.mockResolvedValue({ statusCode: 201 });
+      await sendPush(ENV_WITH_TTL, SUBSCRIPTION, 'fajr', 'en');
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        { TTL: 3600 },
+      );
+    });
+
+    it('override ttl parameter takes precedence over env var', async () => {
+      mockSendNotification.mockResolvedValue({ statusCode: 201 });
+      await sendPush(ENV_WITH_TTL, SUBSCRIPTION, 'fajr', 'en', 7200);
+      expect(mockSendNotification).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        { TTL: 7200 },
+      );
+    });
+
+    it('passes options as third argument to sendNotification', async () => {
+      mockSendNotification.mockResolvedValue({ statusCode: 201 });
+      await sendPush(ENV, SUBSCRIPTION, 'fajr', 'en');
+      const args = mockSendNotification.mock.calls[0];
+      // args: [pushSub, payload, options]
+      expect(args).toHaveLength(3);
+      expect(args[2]).toEqual({ TTL: 21600 });
+    });
   });
 });

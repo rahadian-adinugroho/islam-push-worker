@@ -21,6 +21,7 @@ export async function sendPush(
     VAPID_PUBLIC_KEY: string;
     VAPID_PRIVATE_KEY: string;
     VAPID_SUBJECT: string;
+    PN_TTL_SECONDS?: string;
   },
   subscription: {
     endpoint: string;
@@ -29,6 +30,7 @@ export async function sendPush(
   },
   prayer: PrayerName,
   locale: Locale = 'en',
+  ttl?: number,
 ): Promise<PushResult> {
   webpush.setVapidDetails(
     env.VAPID_SUBJECT,
@@ -54,9 +56,12 @@ export async function sendPush(
     data: { prayer },
   });
 
+  // Parse TTL from env or use the override. Default 21600s = 6 hours.
+  const ttlSeconds = ttl ?? parseInt(env.PN_TTL_SECONDS ?? '21600', 10);
+
   try {
-    await webpush.sendNotification(pushSub, payload);
-    log.debug(`[push] ok: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer}`);
+    await webpush.sendNotification(pushSub, payload, { TTL: ttlSeconds });
+    log.debug(`[push] ok: sub=${subscription.endpoint.slice(0, 50)}... prayer=${prayer} ttl=${ttlSeconds}s`);
     return { ok: true };
   } catch (error: unknown) {
     const err = error as { statusCode?: number; message?: string };
