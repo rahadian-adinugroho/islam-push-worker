@@ -24,6 +24,18 @@ export function getPrayerName(prayer: PrayerKey, locale: Locale): string {
   return PRAYER_NAMES[locale][prayer];
 }
 
+const VALID_METHODS = new Set([
+  'singapore', 'ummAlQura', 'muslimWorldLeague', 'egyptian',
+  'karachi', 'northAmerica', 'tehran', 'turkey',
+]);
+
+/** Normalize a calculation method string, defaulting to 'muslimWorldLeague'. */
+export function normalizeCalcMethod(input: string | null | undefined): string {
+  if (!input) return 'muslimWorldLeague';
+  if (VALID_METHODS.has(input)) return input;
+  return 'muslimWorldLeague';
+}
+
 /** Get the localized notification title and body for a prayer. */
 export function getNotificationTitle(
   prayer: PrayerKey,

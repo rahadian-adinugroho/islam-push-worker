@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   normalizeLocale,
+  normalizeCalcMethod,
   getPrayerName,
   getNotificationTitle,
 } from '../src/i18n';
@@ -129,5 +130,33 @@ describe('getNotificationTitle', () => {
         expect(result.body).toBe(expected);
       }
     });
+  });
+});
+
+describe('normalizeCalcMethod', () => {
+  it('returns default for null', () => {
+    expect(normalizeCalcMethod(null)).toBe('muslimWorldLeague');
+  });
+
+  it('returns default for undefined', () => {
+    expect(normalizeCalcMethod(undefined)).toBe('muslimWorldLeague');
+  });
+
+  it('returns default for empty string', () => {
+    expect(normalizeCalcMethod('')).toBe('muslimWorldLeague');
+  });
+
+  it('returns valid methods as-is', () => {
+    const methods = [
+      'singapore', 'ummAlQura', 'muslimWorldLeague', 'egyptian',
+      'karachi', 'northAmerica', 'tehran', 'turkey',
+    ];
+    for (const method of methods) {
+      expect(normalizeCalcMethod(method)).toBe(method);
+    }
+  });
+
+  it('returns default for unknown method', () => {
+    expect(normalizeCalcMethod('invalidMethod')).toBe('muslimWorldLeague');
   });
 });

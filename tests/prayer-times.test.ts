@@ -63,6 +63,48 @@ describe('getTodayPrayerTimes', () => {
     const equator = getTodayPrayerTimes(0, 0);
     expect(equator).toHaveLength(5);
   });
+
+  it('defaults to muslimWorldLeague when no method given', () => {
+    const times = getTodayPrayerTimes(-6.2, 106.8);
+    expect(times).toHaveLength(5);
+  });
+
+  it('accepts singapore method and produces valid times', () => {
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'singapore');
+    expect(times).toHaveLength(5);
+    for (const entry of times) {
+      expect(entry.time).toBeInstanceOf(Date);
+      expect(isNaN(entry.time.getTime())).toBe(false);
+    }
+  });
+
+  it('different methods produce different times for same coords', () => {
+    const muslimWorldLeague = getTodayPrayerTimes(35.7, 139.7, 'muslimWorldLeague');
+    const ummAlQura = getTodayPrayerTimes(35.7, 139.7, 'ummAlQura');
+    // Use Tokyo coords with two methods — they should differ for at least one prayer
+    const mwlMinutes = muslimWorldLeague.map((t) => getPrayerTimeMinutes(t.time));
+    const uaqMinutes = ummAlQura.map((t) => getPrayerTimeMinutes(t.time));
+    expect(mwlMinutes).not.toEqual(uaqMinutes);
+  });
+
+  it('accepts all valid methods without error', () => {
+    const methods = [
+      'singapore', 'ummAlQura', 'muslimWorldLeague', 'egyptian',
+      'karachi', 'northAmerica', 'tehran', 'turkey',
+    ];
+    for (const method of methods) {
+      const times = getTodayPrayerTimes(40.7, -74.0, method);
+      expect(times).toHaveLength(5);
+      for (const entry of times) {
+        expect(isNaN(entry.time.getTime())).toBe(false);
+      }
+    }
+  });
+
+  it('falls back to muslimWorldLeague for unknown method', () => {
+    const times = getTodayPrayerTimes(-6.2, 106.8, 'nonexistent');
+    expect(times).toHaveLength(5);
+  });
 });
 
 describe('getPrayerTimeMinutes', () => {

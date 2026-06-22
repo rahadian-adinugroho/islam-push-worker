@@ -101,6 +101,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'Asia/Jakarta',
       'id',
+      'singapore',
       { fajr: true, dhuhr: true, asr: false, maghrib: true, isha: true },
     );
 
@@ -111,6 +112,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
     expect(subs[0].lng).toBe(106.8);
     expect(subs[0].timezone).toBe('Asia/Jakarta');
     expect(subs[0].locale).toBe('id');
+    expect(subs[0].calc_method).toBe('singapore');
     expect(subs[0].notify_fajr).toBe(1);
     expect(subs[0].notify_dhuhr).toBe(1);
     expect(subs[0].notify_asr).toBe(0);
@@ -127,6 +129,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'Asia/Jakarta',
       'en',
+      'muslimWorldLeague',
       { fajr: true },
     );
     mockSendNotification.mockResolvedValue({ statusCode: 201 });
@@ -169,6 +172,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'Asia/Jakarta',
       'en',
+      'muslimWorldLeague',
       { fajr: true },
     );
     const error = new Error('Gone') as Error & { statusCode: number };
@@ -214,6 +218,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'Asia/Jakarta',
       'en',
+      'muslimWorldLeague',
       { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true },
     );
 
@@ -240,6 +245,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'Asia/Jakarta',
       'en',
+      'muslimWorldLeague',
       { fajr: true },
     );
 
@@ -256,6 +262,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
       106.8,
       'UTC',
       'en',
+      'muslimWorldLeague',
       { fajr: false },
     );
     const subs2 = await getActiveSubscriptions(env);
