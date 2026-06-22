@@ -25,6 +25,10 @@ export interface Env {
   /** How many seconds after the prayer time the PN should fire. Default 30.
    *  Set to 0 to fire at the exact prayer time (within cron-jitter tolerance). */
   PN_BUFFER_SECONDS?: string;
+  /** How long (in seconds) the push service should retain the message
+   *  if the device is offline. Default 21600 (6 hours). After this time,
+   *  the message is discarded by the push service. */
+  PN_TTL_SECONDS?: string;
 }
 
 function jsonResponse(body: unknown, status: number, headers: Record<string, string>): Response {

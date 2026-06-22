@@ -21,6 +21,10 @@ LOG_LEVEL = "debug"
 # How many seconds after the prayer time the PN should fire. Default 30.
 # Set higher for more delay, lower for less. Never fires before the prayer time.
 PN_BUFFER_SECONDS = "30"
+# How long (in seconds) the push service should retain the message
+# if the device is offline. After this time, the message is discarded.
+# Default 21600 (6 hours). Set to 0 to use the web-push library default (4 weeks).
+PN_TTL_SECONDS = "21600"
 
 [observability]
 enabled = true
