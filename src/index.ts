@@ -156,7 +156,8 @@ export default {
       const timezone = getTimezoneFromCoords(sub.lat, sub.lng);
 
       const todayStr = getTodayDateString(timezone);
-      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, sub.calc_method, timezone);
+      const calcMethod = normalizeCalcMethod(sub.calc_method);
+      const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, calcMethod, timezone);
       const now = Date.now();
 
       const prayerChecks: { name: PrayerName; enabled: boolean }[] = [

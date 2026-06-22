@@ -11,7 +11,7 @@ const ALL_PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 /**
  * Map a calculation method name to its adhan equivalent.
- * Defaults to MuslimWorldLeague for unknown values.
+ * Defaults to Singapore for unknown or null values.
  */
 function getCalculationMethod(method: string): CalculationMethod {
   switch (method) {
@@ -32,7 +32,7 @@ function getCalculationMethod(method: string): CalculationMethod {
     case 'turkey':
       return CalculationMethod.Turkey();
     default:
-      return CalculationMethod.MuslimWorldLeague();
+      return CalculationMethod.Singapore();
   }
 }
 
