@@ -10,13 +10,30 @@ export interface PrayerTimeEntry {
 const ALL_PRAYERS: PrayerName[] = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
 
 /**
+ * Singapore method with Kemenag RI ihtiyat (precautionary) adjustments.
+ * Matches the PWA behavior in website/islam/src/scripts/prayer-times.ts.
+ */
+function singaporeWithIhtiyat() {
+  const params = CalculationMethod.Singapore();
+  params.adjustments = {
+    fajr: 2,
+    sunrise: -2,
+    dhuhr: 2,
+    asr: 2,
+    maghrib: 2,
+    isha: 2,
+  };
+  return params;
+}
+
+/**
  * Map a calculation method name to its adhan equivalent.
- * Defaults to Singapore for unknown or null values.
+ * Defaults to Singapore (with ihtiyat) for unknown or null values.
  */
 function getCalculationMethod(method: string): CalculationMethod {
   switch (method) {
     case 'singapore':
-      return CalculationMethod.Singapore();
+      return singaporeWithIhtiyat();
     case 'ummAlQura':
       return CalculationMethod.UmmAlQura();
     case 'muslimWorldLeague':
@@ -32,7 +49,7 @@ function getCalculationMethod(method: string): CalculationMethod {
     case 'turkey':
       return CalculationMethod.Turkey();
     default:
-      return CalculationMethod.Singapore();
+      return singaporeWithIhtiyat();
   }
 }
 
