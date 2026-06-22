@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@photostructure/tz-lookup": "^11.5.0",
     "adhan": "^4.0.0",
     "web-push": "^3.6.7"
   },
