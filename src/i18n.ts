@@ -6,9 +6,21 @@ export const PRAYER_NAMES: Record<Locale, Record<PrayerKey, string>> = {
   id: { fajr: 'Subuh', dhuhr: 'Dzuhur', asr: 'Ashar', maghrib: 'Maghrib', isha: 'Isya' },
 };
 
-export const APP_STRINGS: Record<Locale, { prayerTime: string; timeForPrayer: string }> = {
-  en: { prayerTime: 'Prayer Time', timeForPrayer: "It's time for {name} prayer" },
-  id: { prayerTime: 'Waktu Sholat', timeForPrayer: 'Waktu {name}' },
+export const APP_STRINGS: Record<Locale, {
+  prayerTime: string;
+  fajrBody: string;
+  genericBody: string;
+}> = {
+  en: {
+    prayerTime: '{name} prayer time',
+    fajrBody: 'Prayer is better than sleep!',
+    genericBody: 'The most beloved deed to Allah is the most consistent.',
+  },
+  id: {
+    prayerTime: 'Waktu Sholat {name}',
+    fajrBody: 'Sholat itu lebih baik dari tidur!',
+    genericBody: 'Amalan yang paling dicintai Allah adalah yang paling konsisten.',
+  },
 };
 
 /** Normalize a locale string to a supported locale, defaulting to 'en'. */
@@ -44,7 +56,7 @@ export function getNotificationTitle(
   const strings = APP_STRINGS[locale];
   const name = PRAYER_NAMES[locale][prayer];
   return {
-    title: strings.prayerTime,
-    body: strings.timeForPrayer.replace('{name}', name),
+    title: strings.prayerTime.replace('{name}', name),
+    body: prayer === 'fajr' ? strings.fajrBody : strings.genericBody,
   };
 }
