@@ -1,117 +1,111 @@
 # islam-push-worker
 
-Cloudflare Worker that sends push notifications for prayer times to PWA subscribers. Runs every minute via cron, computes prayer times per user's coordinates and calculation method, and delivers VAPID-signed web push notifications.
+Cloudflare Worker that sends push notifications for prayer times to the [islam.raharoho.me](https://islam.raharoho.me) PWA. Runs every minute via cron.
 
 ## Features
 
-- **Web Push notifications** — VAPID-signed push delivery via `web-push`
-- **Scheduled cron handler** — runs every minute to check and fire notifications
-- **Locale-aware** — notification title/body in English or Indonesian (`locale` column)
-- **Calculation methods** — supports 8 methods (singapore, MWL, UmmAlQura, etc.), stored per user in D1
-- **Kemenag RI ihtiyat adjustments** — +2 min precautionary offsets for Singapore method (matches PWA)
-- **Timezone from coordinates** — uses `@photostructure/tz-lookup` to derive timezone from lat/lng (no client trust)
-- **Epoch-based comparison** — timezone-agnostic prayer time matching using `Date.getTime()`
-- **Late-only notification window** — PN fires at or after prayer time, never before (configurable via `PN_BUFFER_SECONDS`)
-- **D1 database** — persistent subscription storage with push state tracking
+- **Web Push** via `web-push` (VAPID-signed)
+- **Locale-aware** notifications (en/id) — title and body translated per user
+- **Per-user calc method** — singapore, MWL, Umm al-Qura, etc., stored in D1
+- **Kemenag RI ihtiyat** — `+2 min` offsets for Singapore method (matches PWA)
+- **Timezone from coordinates** via `@photostructure/tz-lookup` (client timezone is unreliable due to privacy shields)
+- **Late-only PN window** — fires at or after prayer time, configurable via `PN_BUFFER_SECONDS`
+- **D1** for subscription storage with push-state tracking
 
 ## Architecture
 
 ```
 src/
-├── index.ts          # fetch handlers + scheduled cron handler
-├── push.ts           # VAPID-signed push notification delivery
-├── prayer-times.ts   # adhan wrapper with ihtiyat adjustments
-├── db.ts             # D1 query helpers (CRUD, preferences, notification state)
-├── i18n.ts           # locale normalization + calculation method normalization
-├── timezone.ts       # timezone derivation from coordinates via geo-tz
-├── cors.ts           # CORS header generation
-└── logger.ts         # level-based logger (debug/info/warn/error)
+├── index.ts              # fetch + scheduled handlers
+├── push.ts               # VAPID push delivery
+├── prayer-times.ts       # adhan wrapper + ihtiyat adjustments
+├── db.ts                 # D1 query helpers
+├── i18n.ts               # locale + calc method normalization
+├── timezone.ts           # timezone derivation from coords
+├── notification-window.ts # shouldSendNotification helper
+├── cors.ts               # CORS
+└── logger.ts             # level-based logger
 ```
 
-## D1 Schema
+## D1 schema
 
-The `subscriptions` table in `islam-push-db`:
-
-| Column                | Type    | Description                                      |
-| --------------------- | ------- | ------------------------------------------------ |
-| `endpoint`            | TEXT PK | Push subscription endpoint URL                   |
-| `keys_p256dh`         | TEXT    | Client public key for ECDH                       |
-| `keys_auth`           | TEXT    | Client auth secret                               |
-| `lat`                 | REAL    | User's latitude                                  |
-| `lng`                 | REAL    | User's longitude                                 |
-| `timezone`            | TEXT    | Client-provided timezone (stored but not trusted) |
-| `locale`              | TEXT    | Notification locale (en/id)                      |
-| `calc_method`         | TEXT    | Calculation method ID (e.g. singapore)           |
-| `notify_fajr`         | INTEGER | Opt-in for Fajr (0 or 1)                         |
-| `notify_dhuhr`        | INTEGER | Opt-in for Dhuhr                                 |
-| `notify_asr`          | INTEGER | Opt-in for Asr                                   |
-| `notify_maghrib`      | INTEGER | Opt-in for Maghrib                               |
-| `notify_isha`         | INTEGER | Opt-in for Isha                                  |
-| `last_notified_prayer`| TEXT    | Last prayer notified                             |
-| `last_notified_date`  | TEXT    | Date (YYYY-MM-DD) of last notification           |
-| `created_at`          | TEXT    | Row creation timestamp                           |
+```
+subscriptions (
+  endpoint TEXT PRIMARY KEY,
+  keys_p256dh TEXT NOT NULL,
+  keys_auth TEXT NOT NULL,
+  lat REAL NOT NULL,
+  lng REAL NOT NULL,
+  timezone TEXT NOT NULL,        -- stored but not trusted
+  locale TEXT NOT NULL,          -- 'en' or 'id'
+  calc_method TEXT NOT NULL,     -- 'singapore', 'ummAlQura', etc.
+  notify_fajr INTEGER DEFAULT 1,
+  notify_dhuhr INTEGER DEFAULT 1,
+  notify_asr INTEGER DEFAULT 1,
+  notify_maghrib INTEGER DEFAULT 1,
+  notify_isha INTEGER DEFAULT 1,
+  last_notified_prayer TEXT,
+  last_notified_date TEXT,
+  created_at TEXT DEFAULT (datetime('now'))
+)
+```
 
 ## Migrations
 
-| File                                     | Purpose                                      |
-| ---------------------------------------- | -------------------------------------------- |
-| `migrations/0001_init.sql`               | Create subscriptions table                   |
-| `migrations/0002_add_locale.sql`         | Add locale column                            |
-| `migrations/0003_add_calc_method.sql`    | Add calc_method column (default MWL)         |
-| `migrations/0004_fix_default_calc_method.sql` | Backfill old rows to singapore            |
+Apply locally: `wrangler d1 migrations apply islam-push-db --local`
 
-Apply migrations locally:
-```bash
-wrangler d1 migrations apply islam-push-db --local
-```
+Apply on deploy: handled automatically by `.github/workflows/deploy.yml`.
+
+| File | Purpose |
+|---|---|
+| `0001_init.sql` | Create subscriptions table |
+| `0002_add_locale.sql` | Add `locale` column |
+| `0003_add_calc_method.sql` | Add `calc_method` column (default MWL) |
+| `0004_fix_default_calc_method.sql` | Backfill old rows to `singapore` |
 
 ## Environment variables
 
-### Plain text (set in `wrangler.toml [vars]`)
+### `wrangler.toml [vars]`
 
-| Var                 | Default | Description                                |
-| ------------------- | ------- | ------------------------------------------ |
-| `VAPID_PUBLIC_KEY`  | *(set)* | VAPID public key for Web Push              |
-| `VAPID_SUBJECT`     | *(set)* | `mailto:` URL for VAPID contact            |
-| `LOG_LEVEL`         | `debug` | Log level: debug, info, warn, error, none  |
-| `PN_BUFFER_SECONDS` | `30`    | Seconds after prayer time to fire PN       |
+| Var | Default | Description |
+|---|---|---|
+| `VAPID_PUBLIC_KEY` | *(set)* | VAPID public key |
+| `VAPID_SUBJECT` | *(set)* | `mailto:` URL for VAPID contact |
+| `LOG_LEVEL` | `debug` | debug / info / warn / error / none |
+| `PN_BUFFER_SECONDS` | `30` | Seconds after prayer time to fire PN |
+| `PN_TTL_SECONDS` | `21600` | Seconds push service retains offline messages (6h) |
 
-### Secrets (set via `wrangler secret put`)
+### Secrets (via `wrangler secret put`)
 
-| Secret              | Description                              |
-| ------------------- | ---------------------------------------- |
-| `VAPID_PRIVATE_KEY` | VAPID private key for Web Push           |
+| Secret | Description |
+|---|---|
+| `VAPID_PRIVATE_KEY` | VAPID private key (also in 1Password, injected via `op run --`) |
 
 ## Local development
 
 ```bash
-# Install dependencies
 bun install
-
-# Start dev server
-op run -- wrangler dev
-
-# Apply D1 migrations locally
-wrangler d1 migrations apply islam-push-db --local
-
-# Run tests
-bun run test
-
-# Run tests with coverage
-bun run test:coverage
-
-# TypeScript check
-bun run typecheck
-
-# Deploy
-bun run deploy
+op run -- wrangler dev              # dev server with secrets from 1Password
+bun run test                         # vitest
+bun run test:coverage                # with coverage
+bun run typecheck                    # tsc --noEmit
+op run -- bun run deploy             # deploy with secrets
 ```
 
 ## CI/CD
 
-| Workflow      | Trigger                    | Action                                    |
-| ------------- | -------------------------- | ----------------------------------------- |
-| `test.yml`    | PRs and pushes             | Run tests + lint                          |
-| `deploy.yml`  | Push to `main`             | Migrations → deploy to Cloudflare         |
+| Workflow | Trigger | Action |
+|---|---|---|
+| `test.yml` | PRs | Run tests |
+| `deploy.yml` | Push to `main` | Migrations → deploy to Cloudflare |
 
-Deployments run on every push to `main`. The cron trigger (`* * * * *`) fires every minute.
+Cron trigger: `* * * * *` (every minute).
+
+## Related repos
+
+- **[website/islam](https://github.com/rahadian-adinugroho/website/tree/main/islam)** — the PWA frontend. Deploy order: **Worker first** (D1 migration + ihtiyat fix), then Website.
+- **[website/AGENTS.md](https://github.com/rahadian-adinugroho/website/blob/main/AGENTS.md)** — context for the website repo.
+
+## AI agent context
+
+See [AGENTS.md](./AGENTS.md) for repo conventions, common tasks, and gotchas.
