@@ -193,7 +193,7 @@ export default {
         }
 
         // Epoch comparison: timezone-agnostic
-        const diffMs = prayerTime.time.getTime() - now;
+        const diffMs = now - prayerTime.time.getTime();
 
         // Send notification at or after the prayer time. Better late than early
         // for prayer. PN_BUFFER_SECONDS controls how many seconds after the
