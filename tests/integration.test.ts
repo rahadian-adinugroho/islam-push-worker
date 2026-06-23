@@ -270,6 +270,7 @@ describe('integration: subscribe → test-push → mark notified', () => {
   });
 });
 
+// TODO: take the diffMs and window check logic to a dedicated method for testability and refactor below tests to use real method
 describe('PN notification window', () => {
   it('fires when diffMs is 0 (at prayer time)', () => {
     const bufferSeconds = 30;
