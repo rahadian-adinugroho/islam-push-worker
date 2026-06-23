@@ -15,6 +15,7 @@ import { log, initLogger } from './logger';
 import { corsHeaders } from './cors';
 import { normalizeLocale, normalizeCalcMethod } from './i18n';
 import { getTimezoneFromCoords } from './timezone';
+import { shouldSendNotification } from './notification-window';
 
 export interface Env {
   DB: D1Database;
@@ -159,7 +160,6 @@ export default {
     let deadRemoved = 0;
 
     const bufferSeconds = parseInt(env.PN_BUFFER_SECONDS ?? '30', 10);
-    const windowEndMs = (bufferSeconds + 60) * 1000;
 
     for (const sub of subscriptions) {
       // Derive timezone from coords — don't trust the client-provided timezone
@@ -199,7 +199,7 @@ export default {
         // for prayer. PN_BUFFER_SECONDS controls how many seconds after the
         // prayer time we target; +60s grace covers cron jitter (cron is every
         // minute). last_notified guard prevents double-firing.
-        if (diffMs >= 0 && diffMs <= windowEndMs) {
+        if (shouldSendNotification(diffMs, bufferSeconds)) {
           log.debug(`[scheduled] sending PN: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs} ts=${new Date().toISOString()}`);
           const result = await sendPush(env, sub, prayer.name, locale);
           if (result.ok) {
