@@ -18,6 +18,7 @@ vi.mock('web-push', () => ({
 
 import { sendPush } from '../src/push';
 import { addSubscription, getActiveSubscriptions, markNotified, removeSubscription, updatePreferences } from '../src/db';
+import { shouldSendNotification } from '../src/notification-window';
 
 const ENDPOINT = 'https://web.push.apple.com/QJptHgdBpmx_82iV1UxbjO4PvlItdEA1XiooAqaUEkSUAwD4gSvYK-SNNf9GKXimiRkVwTLUb7ThdhSUDuK-pYpWKAGgrREoCro13r7IyNutI2d3mQcR2lhyCIIVv3ZlOsaK731gnHmQsx3xEJHKW1c4AkhWhnDr-IVjREJidRg';
 
@@ -270,55 +271,32 @@ describe('integration: subscribe → test-push → mark notified', () => {
   });
 });
 
-// TODO: take the diffMs and window check logic to a dedicated method for testability and refactor below tests to use real method
 describe('PN notification window', () => {
   it('fires when diffMs is 0 (at prayer time)', () => {
-    const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
+    expect(shouldSendNotification(0, 30)).toBe(true);
   });
 
   it('fires when diffMs is positive and within window', () => {
-    const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(45_000 >= 0 && 45_000 <= windowEndMs).toBe(true);
+    expect(shouldSendNotification(45_000, 30)).toBe(true);
   });
 
   it('does NOT fire when diffMs is negative (before prayer)', () => {
-    const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect((-1_000) >= 0 && (-1_000) <= windowEndMs).toBe(false);
+    expect(shouldSendNotification(-1_000, 30)).toBe(false);
   });
 
   it('does NOT fire when diffMs exceeds (buffer + 60) * 1000', () => {
-    const bufferSeconds = 30;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect((windowEndMs + 1) >= 0 && (windowEndMs + 1) <= windowEndMs).toBe(false);
+    expect(shouldSendNotification(90_001, 30)).toBe(false);
   });
 
-  it('respects PN_BUFFER_SECONDS=0 (fire at exact prayer time)', () => {
-    const bufferSeconds = 0;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    // At prayer time
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
-    // Just after prayer time (within cron grace)
-    expect(30_000 >= 0 && 30_000 <= windowEndMs).toBe(true);
-    // Past the grace window
-    expect(90_000 >= 0 && 90_000 <= windowEndMs).toBe(false);
+  it('respects PN_BUFFER_SECONDS=0 (fire only within 60s grace)', () => {
+    expect(shouldSendNotification(0, 0)).toBe(true);
+    expect(shouldSendNotification(30_000, 0)).toBe(true);
+    expect(shouldSendNotification(90_000, 0)).toBe(false);
   });
 
   it('respects PN_BUFFER_SECONDS=120 (allow 2min buffer + 1min grace)', () => {
-    const bufferSeconds = 120;
-    const windowEndMs = (bufferSeconds + 60) * 1000;
-    expect(0 >= 0 && 0 <= windowEndMs).toBe(true);
-    expect(150_000 >= 0 && 150_000 <= windowEndMs).toBe(true);
-    expect(200_000 >= 0 && 200_000 <= windowEndMs).toBe(false);
-  });
-
-  it('default buffer is 30 seconds when env var is not set', () => {
-    // This tests the fallback in the scheduled handler logic
-    // (env.PN_BUFFER_SECONDS ?? '30' falls back to '30' when undefined)
-    const windowEndMs = (30 + 60) * 1000;
-    expect(windowEndMs).toBe(90_000);
+    expect(shouldSendNotification(0, 120)).toBe(true);
+    expect(shouldSendNotification(150_000, 120)).toBe(true);
+    expect(shouldSendNotification(180_001, 120)).toBe(false);
   });
 });
