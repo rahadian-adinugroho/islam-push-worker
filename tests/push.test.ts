@@ -60,8 +60,8 @@ describe('sendPush', () => {
     expect(sub.keys.auth).toBe(SUBSCRIPTION.keys_auth);
 
     const parsed = JSON.parse(payload);
-    expect(parsed.title).toBe('Prayer Time');
-    expect(parsed.body).toContain('Maghrib');
+    expect(parsed.title).toBe('Maghrib prayer time');
+    expect(parsed.body).toBe('The most beloved deed to Allah is the most consistent.');
     expect(parsed.tag).toBe('prayer-maghrib');
   });
 
@@ -99,9 +99,12 @@ describe('sendPush', () => {
       const [_, payload] = mockSendNotification.mock.calls[mockSendNotification.mock.calls.length - 1];
       const parsed = JSON.parse(payload);
       expect(parsed.tag).toBe(`prayer-${prayer}`);
-      expect(parsed.title).toBe('Prayer Time');
-      const expectedName = prayer.charAt(0).toUpperCase() + prayer.slice(1);
-      expect(parsed.body).toContain(expectedName);
+      expect(parsed.title).toBe(`${prayer.charAt(0).toUpperCase() + prayer.slice(1)} prayer time`);
+      expect(parsed.body).toBe(
+        prayer === 'fajr'
+          ? 'Prayer is better than sleep!'
+          : 'The most beloved deed to Allah is the most consistent.',
+      );
     }
   });
 
@@ -111,8 +114,8 @@ describe('sendPush', () => {
     await sendPush(ENV, SUBSCRIPTION, 'fajr', 'id');
     const [_, payload] = mockSendNotification.mock.calls[0];
     const parsed = JSON.parse(payload);
-    expect(parsed.title).toBe('Waktu Sholat');
-    expect(parsed.body).toBe('Waktu Subuh');
+    expect(parsed.title).toBe('Waktu Sholat Subuh');
+    expect(parsed.body).toBe('Sholat itu lebih baik dari tidur!');
     expect(parsed.tag).toBe('prayer-fajr');
   });
 

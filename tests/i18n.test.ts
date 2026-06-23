@@ -87,49 +87,54 @@ describe('getPrayerName', () => {
   });
 });
 
-describe('getNotificationTitle', () => {
-  describe('English', () => {
-    it('returns correct title and body for fajr', () => {
-      const result = getNotificationTitle('fajr', 'en');
-      expect(result.title).toBe('Prayer Time');
-      expect(result.body).toBe("It's time for Fajr prayer");
-    });
-
-    it('returns correct body for each prayer', () => {
-      const tests: Array<{ prayer: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'; expected: string }> = [
-        { prayer: 'fajr', expected: "It's time for Fajr prayer" },
-        { prayer: 'dhuhr', expected: "It's time for Dhuhr prayer" },
-        { prayer: 'asr', expected: "It's time for Asr prayer" },
-        { prayer: 'maghrib', expected: "It's time for Maghrib prayer" },
-        { prayer: 'isha', expected: "It's time for Isha prayer" },
-      ];
-      for (const { prayer, expected } of tests) {
-        const result = getNotificationTitle(prayer, 'en');
-        expect(result.body).toBe(expected);
-      }
-    });
+describe('getNotificationTitle — title includes prayer name', () => {
+  it('en/fajr title', () => {
+    expect(getNotificationTitle('fajr', 'en').title).toBe('Fajr prayer time');
   });
+  it('en/dhuhr title', () => {
+    expect(getNotificationTitle('dhuhr', 'en').title).toBe('Dhuhr prayer time');
+  });
+  it('en/asr title', () => {
+    expect(getNotificationTitle('asr', 'en').title).toBe('Asr prayer time');
+  });
+  it('en/maghrib title', () => {
+    expect(getNotificationTitle('maghrib', 'en').title).toBe('Maghrib prayer time');
+  });
+  it('en/isha title', () => {
+    expect(getNotificationTitle('isha', 'en').title).toBe('Isha prayer time');
+  });
+  it('id/fajr title', () => {
+    expect(getNotificationTitle('fajr', 'id').title).toBe('Waktu Sholat Subuh');
+  });
+  it('id/dhuhr title', () => {
+    expect(getNotificationTitle('dhuhr', 'id').title).toBe('Waktu Sholat Dzuhur');
+  });
+  it('id/asr title', () => {
+    expect(getNotificationTitle('asr', 'id').title).toBe('Waktu Sholat Ashar');
+  });
+  it('id/maghrib title', () => {
+    expect(getNotificationTitle('maghrib', 'id').title).toBe('Waktu Sholat Maghrib');
+  });
+  it('id/isha title', () => {
+    expect(getNotificationTitle('isha', 'id').title).toBe('Waktu Sholat Isya');
+  });
+});
 
-  describe('Indonesian', () => {
-    it('returns correct title and body for fajr', () => {
-      const result = getNotificationTitle('fajr', 'id');
-      expect(result.title).toBe('Waktu Sholat');
-      expect(result.body).toBe('Waktu Subuh');
-    });
+describe('getNotificationTitle — Fajr body (hadith)', () => {
+  it('en/fajr returns hadith', () => {
+    expect(getNotificationTitle('fajr', 'en').body).toBe('Prayer is better than sleep!');
+  });
+  it('id/fajr returns hadith', () => {
+    expect(getNotificationTitle('fajr', 'id').body).toBe('Sholat itu lebih baik dari tidur!');
+  });
+});
 
-    it('returns correct body for each prayer', () => {
-      const tests: Array<{ prayer: 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha'; expected: string }> = [
-        { prayer: 'fajr', expected: 'Waktu Subuh' },
-        { prayer: 'dhuhr', expected: 'Waktu Dzuhur' },
-        { prayer: 'asr', expected: 'Waktu Ashar' },
-        { prayer: 'maghrib', expected: 'Waktu Maghrib' },
-        { prayer: 'isha', expected: 'Waktu Isya' },
-      ];
-      for (const { prayer, expected } of tests) {
-        const result = getNotificationTitle(prayer, 'id');
-        expect(result.body).toBe(expected);
-      }
-    });
+describe('getNotificationTitle — non-Fajr body (motivational)', () => {
+  it.each(['dhuhr', 'asr', 'maghrib', 'isha'] as const)('en/%s returns generic body', (prayer) => {
+    expect(getNotificationTitle(prayer, 'en').body).toBe('The most beloved deed to Allah is the most consistent.');
+  });
+  it.each(['dhuhr', 'asr', 'maghrib', 'isha'] as const)('id/%s returns generic body', (prayer) => {
+    expect(getNotificationTitle(prayer, 'id').body).toBe('Amalan yang paling dicintai Allah adalah yang paling konsisten.');
   });
 });
 
