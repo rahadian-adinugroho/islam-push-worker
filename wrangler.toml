@@ -28,3 +28,4 @@ PN_TTL_SECONDS = "21600"
 
 [observability]
 enabled = true
+traces.enabled = true
