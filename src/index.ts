@@ -13,7 +13,8 @@ import {
 import { sendPush } from './push';
 import { log, initLogger } from './logger';
 import { corsHeaders } from './cors';
-import { normalizeLocale, normalizeCalcMethod } from './i18n';
+import { normalizeLocale, normalizeCalcMethod, type Locale } from './i18n';
+import type { PushSubscription } from './db';
 import { getTimezoneFromCoords } from './timezone';
 import { shouldSendNotification } from './notification-window';
 
@@ -156,10 +157,17 @@ export default {
     const subscriptions = await getActiveSubscriptions(env);
     log.debug(`[scheduled] found ${subscriptions.length} active subscription(s)`);
 
-    let pushesSent = 0;
-    let deadRemoved = 0;
-
     const bufferSeconds = parseInt(env.PN_BUFFER_SECONDS ?? '30', 10);
+
+    // Build a flat list of push tasks. Each task is an independent (sub, prayer)
+    // pair that should be notified. Local CPU only — no awaits in the build phase.
+    type PushTask = {
+      sub: PushSubscription;
+      prayer: PrayerName;
+      todayStr: string;
+      locale: Locale;
+    };
+    const tasks: PushTask[] = [];
 
     for (const sub of subscriptions) {
       // Derive timezone from coords — don't trust the client-provided timezone
@@ -169,6 +177,7 @@ export default {
       const calcMethod = normalizeCalcMethod(sub.calc_method);
       const locale = normalizeLocale(sub.locale);
       log.debug(`[scheduled] sub=${sub.endpoint.slice(0, 50)}... calc_method=${calcMethod} (raw=${sub.calc_method}) tz=${timezone} lat=${sub.lat.toFixed(2)} lng=${sub.lng.toFixed(2)}`);
+
       const prayerTimes = getTodayPrayerTimes(sub.lat, sub.lng, calcMethod, timezone);
       const prayerTimesByPrayer = new Map(prayerTimes.map((pt) => [pt.id, pt]));
       const now = Date.now();
@@ -200,21 +209,65 @@ export default {
         // prayer time we target; +60s grace covers cron jitter (cron is every
         // minute). last_notified guard prevents double-firing.
         if (shouldSendNotification(diffMs, bufferSeconds)) {
-          log.debug(`[scheduled] sending PN: sub=${sub.endpoint.slice(0, 50)}... prayer=${prayer.name} diffMs=${diffMs} ts=${new Date().toISOString()}`);
-          const result = await sendPush(env, sub, prayer.name, locale);
-          if (result.ok) {
-            await markNotified(env, sub.endpoint, prayer.name, todayStr);
-            pushesSent++;
-          } else if (result.statusCode === 404 || result.statusCode === 410) {
-            // Subscription expired / removed — clean up
-            await removeSubscription(env, sub.endpoint);
-            deadRemoved++;
-          }
+          tasks.push({ sub, prayer: prayer.name, todayStr, locale });
         }
       }
     }
 
+    log.debug(`[scheduled] built ${tasks.length} push task(s)`);
+
+    if (tasks.length === 0) {
+      const elapsedMs = Date.now() - startTime;
+      log.info(`[scheduled] done in ${elapsedMs}ms: nothing to send`);
+      return;
+    }
+
+    // Batch by BATCH_SIZE. Cloudflare Workers free tier allows 50 subrequests
+    // per invocation; each sendPush = 1 subrequest. Bump to 1000 if upgrading
+    // to Workers Paid. Backlog clears in 1-2 cron runs (cron is every minute,
+    // PN window is ~90s).
+    const BATCH_SIZE = 50;
+    const batch = tasks.slice(0, BATCH_SIZE);
+    const deferred = tasks.length - batch.length;
+    if (deferred > 0) {
+      log.warn(`[scheduled] ${deferred} task(s) deferred to next cron run (limit ${BATCH_SIZE})`);
+    }
+
+    // Send all push tasks in parallel. Use allSettled (not all) so one user's
+    // network error doesn't reject the entire batch and skip markNotified /
+    // removeSubscription for everyone else.
+    const pushResults = await Promise.allSettled(
+      batch.map((task) => sendPush(env, task.sub, task.prayer, task.locale)),
+    );
+
+    // Bucket results
+    const successes: PushTask[] = [];
+    const dead: PushTask[] = [];
+    let errors = 0;
+
+    for (let i = 0; i < batch.length; i++) {
+      const task = batch[i];
+      const r = pushResults[i];
+      if (r.status === 'fulfilled') {
+        if (r.value.ok) {
+          successes.push(task);
+        } else if (r.value.statusCode === 404 || r.value.statusCode === 410) {
+          dead.push(task);
+        }
+      } else {
+        errors++;
+        log.error(`[scheduled] push error: sub=${task.sub.endpoint.slice(0, 50)}... prayer=${task.prayer}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+      }
+    }
+
+    // D1 writes in parallel. markNotified and removeSubscription are
+    // independent — fire them together.
+    await Promise.all([
+      ...successes.map((t) => markNotified(env, t.sub.endpoint, t.prayer, t.todayStr)),
+      ...dead.map((t) => removeSubscription(env, t.sub.endpoint)),
+    ]);
+
     const elapsedMs = Date.now() - startTime;
-    log.info(`[scheduled] done in ${elapsedMs}ms: ${pushesSent} push(es) sent, ${deadRemoved} dead subscription(s) removed (buffer=${bufferSeconds}s)`);
+    log.info(`[scheduled] done in ${elapsedMs}ms: ${successes.length} push(es) sent, ${dead.length} dead, ${errors} error(s) (buffer=${bufferSeconds}s, batch=${batch.length}/${tasks.length})`);
   },
 };
