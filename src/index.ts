@@ -163,6 +163,7 @@ export default {
     log.debug(`[scheduled] found ${subscriptions.length} active subscription(s)`);
 
     const bufferSeconds = parseInt(env.PN_BUFFER_SECONDS ?? '30', 10);
+    const batchSize = parseInt(env.PN_BATCH_SIZE ?? '50', 10);
 
     // Build a flat list of push tasks. Each task is an independent (sub, prayer)
     // pair that should be notified. Local CPU only — no awaits in the build phase.
@@ -173,10 +174,17 @@ export default {
       locale: Locale;
     };
     const tasks: PushTask[] = [];
+    let subsIterated = 0;
 
     for (const sub of subscriptions) {
-      // Derive timezone from coords — don't trust the client-provided timezone
-      const timezone = getTimezoneFromCoords(sub.lat, sub.lng);
+      // CPU cap: stop building when the batch is full. No point computing
+      // adhan math or D1 prep for subs whose PNs would be deferred anyway.
+      if (tasks.length >= batchSize) break;
+      subsIterated++;
+
+      // Use D1 timezone when available (PWA sends browser-derived timezone on
+      // subscribe). Fall back to tz-lookup from coords for legacy rows.
+      const timezone = sub.timezone || getTimezoneFromCoords(sub.lat, sub.lng);
 
       const todayStr = getTodayDateString(timezone);
       const calcMethod = normalizeCalcMethod(sub.calc_method);
@@ -227,17 +235,16 @@ export default {
       return;
     }
 
-    // Batch by env-configurable PN_BATCH_SIZE. Cloudflare Workers free tier
-    // allows 50 subrequests per invocation; each sendPush = 1 subrequest.
-    // Default 50 (the free tier hard limit). Bump via wrangler.toml [vars]
-    // when upgrading to Workers Paid (1000+). Tasks beyond the batch are
-    // deferred to the next cron run (cron is every minute, PN window is
-    // ~90s, so a backlog clears in 1-2 runs).
-    const batchSize = parseInt(env.PN_BATCH_SIZE ?? '50', 10);
+    // Slice to batch size. The early-break in the build loop already ensures
+    // tasks never exceeds batchSize, so this is effectively a no-op (but kept
+    // as defense-in-depth in case the cap logic changes).
     const batch = tasks.slice(0, batchSize);
-    const deferred = tasks.length - batch.length;
-    if (deferred > 0) {
-      log.warn(`[scheduled] ${deferred} task(s) deferred to next cron run (limit ${batchSize})`);
+
+    const subsDeferred = subscriptions.length - subsIterated;
+    if (subsDeferred > 0) {
+      log.warn(
+        `[scheduled] ${subsDeferred} of ${subscriptions.length} subscription(s) deferred to next cron run (CPU cap reached: ${batchSize} PNs this run)`,
+      );
     }
 
     // Send all push tasks in parallel. Use allSettled (not all) so one user's

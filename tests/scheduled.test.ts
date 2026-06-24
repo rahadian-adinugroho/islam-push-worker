@@ -17,8 +17,17 @@ vi.mock('web-push', () => ({
 }));
 
 // ---------------------------------------------------------------------------
-// Mock tz-lookup so getTimezoneFromCoords returns a fixed timezone
+// Mock timezone functions from the app
 // ---------------------------------------------------------------------------
+const { mockGetTimezoneFromCoords } = vi.hoisted(() => ({
+  mockGetTimezoneFromCoords: vi.fn().mockReturnValue('Asia/Jakarta'),
+}));
+
+vi.mock('../src/timezone', () => ({
+  getTimezoneFromCoords: mockGetTimezoneFromCoords,
+}));
+
+// Mock tz-lookup so the fallback works in tests
 vi.mock('@photostructure/tz-lookup', () => ({
   default: vi.fn(() => 'Asia/Jakarta'),
 }));
@@ -112,6 +121,7 @@ async function addSub(
     endpoint: string;
     lat: number;
     lng: number;
+    timezone: string | null;
     locale: string;
     calc_method: string;
     notify_fajr: number;
@@ -315,5 +325,101 @@ describe('scheduled handler — parallelism and batching', () => {
     await worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
 
     expect(mockSendNotification).not.toHaveBeenCalled();
+  });
+});
+
+describe('scheduled handler — CPU cap', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendNotification.mockResolvedValue({ statusCode: 201 });
+  });
+
+  it('stops iterating when tasks.length reaches batchSize', async () => {
+    const env = makeEnv();
+    // Add 60 subs with fajr enabled and within PN window
+    for (let i = 0; i < 60; i++) {
+      await addSub(env, {
+        endpoint: `https://push.example.com/sub-${i}`,
+        notify_fajr: 1,
+        notify_dhuhr: 0,
+        notify_asr: 0,
+        notify_maghrib: 0,
+        notify_isha: 0,
+      });
+    }
+
+    await worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
+
+    // Exactly batchSize sends (50), the rest deferred
+    expect(mockSendNotification).toHaveBeenCalledTimes(50);
+  });
+
+  it('processes all subs when under batchSize', async () => {
+    const env = makeEnv();
+    for (let i = 0; i < 5; i++) {
+      await addSub(env, {
+        endpoint: `https://push.example.com/sub-${i}`,
+        notify_fajr: 1,
+        notify_dhuhr: 0,
+        notify_asr: 0,
+        notify_maghrib: 0,
+        notify_isha: 0,
+      });
+    }
+
+    await worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
+
+    // All 5 sent (under batchSize limit)
+    expect(mockSendNotification).toHaveBeenCalledTimes(5);
+  });
+});
+
+describe('scheduled handler — D1 timezone', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockSendNotification.mockResolvedValue({ statusCode: 201 });
+    mockGetTimezoneFromCoords.mockClear();
+  });
+
+  it('uses D1 timezone when present', async () => {
+    const env = makeEnv();
+    await addSub(env, {
+      endpoint: 'https://push.example.com/sub-1',
+      timezone: 'Asia/Jakarta',
+      notify_fajr: 1,
+      notify_dhuhr: 0,
+      notify_asr: 0,
+      notify_maghrib: 0,
+      notify_isha: 0,
+    });
+
+    await worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
+
+    // getTimezoneFromCoords NOT called (D1 timezone used directly)
+    expect(mockGetTimezoneFromCoords).not.toHaveBeenCalled();
+    // Push was sent
+    expect(mockSendNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it('falls back to coords when D1 timezone is null', async () => {
+    const env = makeEnv();
+    // Insert a subscription with NULL timezone
+    await addSub(env, {
+      endpoint: 'https://push.example.com/sub-1',
+      timezone: null,
+      notify_fajr: 1,
+      notify_dhuhr: 0,
+      notify_asr: 0,
+      notify_maghrib: 0,
+      notify_isha: 0,
+    });
+
+    await worker.scheduled({} as ScheduledEvent, env, {} as ExecutionContext);
+
+    // getTimezoneFromCoords called once with the coords
+    expect(mockGetTimezoneFromCoords).toHaveBeenCalledTimes(1);
+    expect(mockGetTimezoneFromCoords).toHaveBeenCalledWith(-6.2, 106.8);
+    // Push was sent
+    expect(mockSendNotification).toHaveBeenCalledTimes(1);
   });
 });
