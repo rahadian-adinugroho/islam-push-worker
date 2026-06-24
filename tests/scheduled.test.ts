@@ -94,13 +94,14 @@ function createMockD1(): D1Database {
   } as unknown as D1Database;
 }
 
-function makeEnv(): { DB: D1Database; VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string; PN_BUFFER_SECONDS: string } {
+function makeEnv(): { DB: D1Database; VAPID_PUBLIC_KEY: string; VAPID_PRIVATE_KEY: string; VAPID_SUBJECT: string; PN_BUFFER_SECONDS: string; PN_BATCH_SIZE: string } {
   return {
     DB: createMockD1(),
     VAPID_PUBLIC_KEY: 'test-public-key',
     VAPID_PRIVATE_KEY: 'test-private-key',
     VAPID_SUBJECT: 'mailto:test@example.com',
     PN_BUFFER_SECONDS: '30',
+    PN_BATCH_SIZE: '50',
   };
 }
 

@@ -31,6 +31,11 @@ export interface Env {
    *  if the device is offline. Default 21600 (6 hours). After this time,
    *  the message is discarded by the push service. */
   PN_TTL_SECONDS?: string;
+  /** Max number of PNs to send per cron execution. Default 50 (Cloudflare
+   *  Workers free tier subrequest limit). Tasks beyond this are deferred
+   *  to the next cron run (cron is every minute; PN window is ~90s, so a
+   *  backlog clears in 1-2 runs). Bump to 1000+ on Workers Paid. */
+  PN_BATCH_SIZE?: string;
 }
 
 function jsonResponse(body: unknown, status: number, headers: Record<string, string>): Response {
@@ -222,15 +227,17 @@ export default {
       return;
     }
 
-    // Batch by BATCH_SIZE. Cloudflare Workers free tier allows 50 subrequests
-    // per invocation; each sendPush = 1 subrequest. Bump to 1000 if upgrading
-    // to Workers Paid. Backlog clears in 1-2 cron runs (cron is every minute,
-    // PN window is ~90s).
-    const BATCH_SIZE = 50;
-    const batch = tasks.slice(0, BATCH_SIZE);
+    // Batch by env-configurable PN_BATCH_SIZE. Cloudflare Workers free tier
+    // allows 50 subrequests per invocation; each sendPush = 1 subrequest.
+    // Default 50 (the free tier hard limit). Bump via wrangler.toml [vars]
+    // when upgrading to Workers Paid (1000+). Tasks beyond the batch are
+    // deferred to the next cron run (cron is every minute, PN window is
+    // ~90s, so a backlog clears in 1-2 runs).
+    const batchSize = parseInt(env.PN_BATCH_SIZE ?? '50', 10);
+    const batch = tasks.slice(0, batchSize);
     const deferred = tasks.length - batch.length;
     if (deferred > 0) {
-      log.warn(`[scheduled] ${deferred} task(s) deferred to next cron run (limit ${BATCH_SIZE})`);
+      log.warn(`[scheduled] ${deferred} task(s) deferred to next cron run (limit ${batchSize})`);
     }
 
     // Send all push tasks in parallel. Use allSettled (not all) so one user's
@@ -268,6 +275,6 @@ export default {
     ]);
 
     const elapsedMs = Date.now() - startTime;
-    log.info(`[scheduled] done in ${elapsedMs}ms: ${successes.length} push(es) sent, ${dead.length} dead, ${errors} error(s) (buffer=${bufferSeconds}s, batch=${batch.length}/${tasks.length})`);
+    log.info(`[scheduled] done in ${elapsedMs}ms: ${successes.length} push(es) sent, ${dead.length} dead, ${errors} error(s) (buffer=${bufferSeconds}s, batch=${batch.length}/${tasks.length}, max=${batchSize})`);
   },
 };

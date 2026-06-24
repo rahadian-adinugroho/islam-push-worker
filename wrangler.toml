@@ -25,6 +25,11 @@ PN_BUFFER_SECONDS = "120"
 # if the device is offline. After this time, the message is discarded.
 # Default 21600 (6 hours). Set to 0 to use the web-push library default (4 weeks).
 PN_TTL_SECONDS = "21600"
+# Max number of PNs to send per cron execution. Default 50 = Cloudflare
+# Workers free tier subrequest limit. Each sendPush = 1 subrequest. Bump
+# to 1000+ on Workers Paid. Deferred tasks are picked up by the next
+# cron run (cron is every minute, PN window is ~90s).
+PN_BATCH_SIZE = "50"
 
 [observability]
 enabled = true
